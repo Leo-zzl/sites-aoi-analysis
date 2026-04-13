@@ -25,12 +25,105 @@
 
 ### 3. 坐标系支持
 - 输入坐标：WGS84（EPSG:4326，经纬度）
-- 距离计算：UTM Zone 50N（EPSG:32650，适用于广东/福建/江西）
-- 支持其他地区（Zone 49/51等）
+- 距离计算：根据数据经纬度**自动计算UTM投影带**，支持全国各地
+
+### 4. 高性能空间索引
+- 室内站→室外站的最近邻查询使用 `scipy.spatial.cKDTree`
+- **10万站点 × 1000 AOI** 规模下分析耗时约 **6 秒**
 
 ---
 
 ## 安装依赖
 
 ```bash
-pip install pandas geopandas shapely openpyxl scipy
+pip install pandas geopandas shapely openpyxl scipy pytest
+```
+
+---
+
+## 项目架构（DDD 分层）
+
+```
+src/site_analysis/
+├── domain/              # 领域层：纯业务逻辑，无外部依赖
+│   ├── models.py        # Site, AOI 实体
+│   └── value_objects.py # CoverageType, UtmZone, AnalysisResult
+├── application/         # 应用层：编排领域对象完成用例
+│   └── analysis_service.py
+├── infrastructure/      # 基础设施层：外部实现
+│   ├── repositories/    # Excel 数据读写
+│   └── geo/             # UTM投影、cKDTree空间索引
+└── interfaces/          # 接口层
+    └── cli.py           # 命令行入口
+```
+
+### 架构原则
+- **Repository 模式**：数据读取通过抽象接口，Excel 只是其中一种实现
+- **领域对象不可变**：`CoverageType`、`UtmZone`、`AnalysisResult` 等使用值对象
+- **应用服务无状态**：`SiteAnalysisService` 只负责编排，不持有持久状态
+
+---
+
+## 使用方法
+
+### 命令行运行
+
+```bash
+python main.py
+```
+
+### 使用 Python API
+
+```python
+from pathlib import Path
+from site_analysis.application.analysis_service import SiteAnalysisService
+from site_analysis.infrastructure.repositories.excel_aoi_repo import ExcelAoiRepository
+from site_analysis.infrastructure.repositories.excel_site_repo import ExcelSiteRepository
+from site_analysis.infrastructure.repositories.excel_result_exporter import ExcelResultExporter
+
+service = SiteAnalysisService(
+    aoi_repo=ExcelAoiRepository(Path("AOI样例数据.xlsx")),
+    site_repo=ExcelSiteRepository(Path("基站站点样例数据.xlsx")),
+    exporter=ExcelResultExporter(),
+)
+result = service.run()
+df = result.to_dataframe()
+```
+
+---
+
+## 测试
+
+### 运行全部测试
+
+```bash
+pytest
+```
+
+### 运行集成测试（含 Golden Master 校验）
+
+```bash
+pytest tests/integration/ -v
+```
+
+### 运行压力测试
+
+```bash
+pytest tests/integration/test_stress.py -v -s
+```
+
+### 测试覆盖说明
+- **单元测试**：验证 `CoverageType` 分类、`UtmZone` 计算等纯领域逻辑
+- **集成测试**：使用 **1000 行 AOI + 1000 行站点** 的测试数据，对比重构前后的输出是否完全一致（Golden Master）
+- **压力测试**：使用 **1000 行 AOI + 10 万行站点** 的测试数据，验证性能在 30 秒以内
+
+---
+
+## 性能基准
+
+| 数据规模 | AOI 匹配 | 最近室外站查询 | 总耗时 |
+|---------|---------|--------------|--------|
+| 1000 站点 × 1000 AOI | ~0.1s | ~0.1s | **~0.2s** |
+| 10万 站点 × 1000 AOI | ~5s | ~1s | **~6s** |
+
+*测试环境：Apple Silicon (M1/M2), Python 3.9*
