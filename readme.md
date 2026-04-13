@@ -36,8 +36,104 @@
 ## 安装依赖
 
 ```bash
-pip install pandas geopandas shapely openpyxl scipy pytest
+pip install pandas geopandas shapely openpyxl scipy
 ```
+
+---
+
+## 输入数据格式
+
+### AOI数据（Excel）
+
+文件名称默认为 `AOI样例数据.xlsx`，按以下列顺序排列：
+
+| 列序号 | 字段名 | 说明 | 示例 |
+|-------|--------|------|------|
+| 1 | 省 | AOI所在省份 | 广东省 |
+| 2 | 市 | AOI所在城市 | 深圳市 |
+| 3 | - | （预留列，工具不读取） | - |
+| 4 | 场景 | AOI场景名称 | 商业区 |
+| 5 | 场景大类 | 场景一级分类 | 城市中心 |
+| 6 | 场景小类 | 场景二级分类 | 核心 |
+| 7 | 边界WKT | AOI多边形边界，WKT格式 | POLYGON((113.2 22.4, ...)) |
+
+### 站点数据（Excel）
+
+文件名称默认为 `基站站点样例数据.xlsx`，**必须包含以下列**：
+
+| 字段名 | 说明 | 示例 |
+|--------|------|------|
+| `小区名称` | 站点唯一标识 | CELL_001 |
+| `使用频段` | 站点使用频段 | 2.6G |
+| `覆盖类型` | 室内/室外分类 | 室内 / 室外 / 宏站 / 室分 |
+
+**经纬度列**支持自动识别，以下列名均可识别：
+- 纬度列：`纬度`、`lat`、`latitude`、`y` 等
+- 经度列：`经度`、`lon`、`longitude`、`x` 等
+- 若自动识别失败，将回退到第4列（纬度）和第6列（经度）
+
+**覆盖类型兼容值**：
+- **室内**：`室内`、`室分`、`室分系统`、`Indoor`
+- **室外**：`室外`、`宏站`、`微站`、`杆站`、`Outdoor`、`宏蜂窝`、`微蜂窝`
+
+---
+
+## 使用方法
+
+### 命令行运行
+
+将AOI数据和站点数据放入项目根目录，执行：
+
+```bash
+python main.py
+```
+
+程序将自动生成结果文件：`小区_AOI匹配_1000米限制_YYYYMMDD_HHMMSS.xlsx`
+
+### 使用 Python API
+
+```python
+from pathlib import Path
+from site_analysis.application.analysis_service import SiteAnalysisService
+from site_analysis.infrastructure.repositories.excel_aoi_repo import ExcelAoiRepository
+from site_analysis.infrastructure.repositories.excel_site_repo import ExcelSiteRepository
+from site_analysis.infrastructure.repositories.excel_result_exporter import ExcelResultExporter
+
+service = SiteAnalysisService(
+    aoi_repo=ExcelAoiRepository(Path("AOI样例数据.xlsx")),
+    site_repo=ExcelSiteRepository(Path("基站站点样例数据.xlsx")),
+    exporter=ExcelResultExporter(),
+)
+result = service.run()
+df = result.to_dataframe()
+```
+
+---
+
+## 输出数据格式
+
+结果Excel会在原始站点数据前面插入以下9列分析结果：
+
+### AOI匹配结果（6列）
+
+| 字段名 | 说明 | 示例 |
+|--------|------|------|
+| `AOI_省` | 匹配到的AOI省份 | 广东省 |
+| `AOI_市` | 匹配到的AOI城市 | 深圳市 |
+| `AOI_场景` | 匹配到的AOI场景 | 商业区 |
+| `AOI_场景大类` | 场景一级分类 | 城市中心 |
+| `AOI_场景小类` | 场景二级分类 | 核心 |
+| `AOI匹配状态` | 是否匹配到AOI | 已匹配 / 未匹配 |
+
+### 最近室外站分析结果（3列）
+
+| 字段名 | 说明 | 示例 |
+|--------|------|------|
+| `最近室外站_名称` | 1000米内最近室外站的名称 | CELL_002 |
+| `最近室外站_频段` | 该室外站的使用频段 | 2.1G |
+| `最近室外站_距离_米` | 精确距离（米），超出1000米为空 | 356.2 |
+
+> 注：只有**覆盖类型为室内**的站点才会计算最近室外站；室外站和未知类型站点的这3列为空。
 
 ---
 
@@ -61,34 +157,6 @@ src/site_analysis/
 - **Repository 模式**：数据读取通过抽象接口，Excel 只是其中一种实现
 - **领域对象不可变**：`CoverageType`、`UtmZone`、`AnalysisResult` 等使用值对象
 - **应用服务无状态**：`SiteAnalysisService` 只负责编排，不持有持久状态
-
----
-
-## 使用方法
-
-### 命令行运行
-
-```bash
-python main.py
-```
-
-### 使用 Python API
-
-```python
-from pathlib import Path
-from site_analysis.application.analysis_service import SiteAnalysisService
-from site_analysis.infrastructure.repositories.excel_aoi_repo import ExcelAoiRepository
-from site_analysis.infrastructure.repositories.excel_site_repo import ExcelSiteRepository
-from site_analysis.infrastructure.repositories.excel_result_exporter import ExcelResultExporter
-
-service = SiteAnalysisService(
-    aoi_repo=ExcelAoiRepository(Path("AOI样例数据.xlsx")),
-    site_repo=ExcelSiteRepository(Path("基站站点样例数据.xlsx")),
-    exporter=ExcelResultExporter(),
-)
-result = service.run()
-df = result.to_dataframe()
-```
 
 ---
 
