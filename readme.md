@@ -33,4 +33,4 @@
 ## 安装依赖
 
 ```bash
-pip install pandas geopandas shapely openpyxl
+pip install pandas geopandas shapely openpyxl scipy

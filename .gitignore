@@ -1,0 +1,7 @@
+.DS_Store
+.claude/
+*.pyc
+__pycache__/
+*.xlsx
+!AOI样例数据.xlsx
+!基站站点样例数据.xlsx
