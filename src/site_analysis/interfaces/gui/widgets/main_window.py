@@ -1,17 +1,46 @@
-"""Main application window."""
+"""Main application window — macOS-compatible rendering."""
 
 import queue
 import threading
 import time
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
 from site_analysis.domain.value_objects import ColumnMapping, ValidationResult
 from site_analysis.interfaces.gui.view_model import MainViewModel
-from site_analysis.interfaces.gui.widgets.mapping_frame import MappingFrame
-from site_analysis.interfaces.gui.widgets.preview_tree import PreviewTree
 from site_analysis.interfaces.gui.widgets.progress_dialog import ProgressDialog
+
+
+# Colors (buttons and text; frames use system bg on macOS)
+RUST = "#C45C26"
+DARK_GRAY = "#1F2937"
+MID_GRAY = "#6B7280"
+LIGHT_GRAY = "#9CA3AF"
+
+FONT_FAMILY = "Microsoft YaHei"
+
+
+class _FieldRow(tk.Frame):
+    """A compact label + combobox row for column mapping."""
+
+    def __init__(self, parent, label_text, combobox_width=18, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.label = tk.Label(
+            self,
+            text=label_text,
+            fg=MID_GRAY,
+            font=(FONT_FAMILY, 10),
+        )
+        self.label.pack(side=tk.LEFT)
+
+        self.combo = ttk.Combobox(
+            self,
+            values=[],
+            state="readonly",
+            width=combobox_width,
+        )
+        self.combo.pack(side=tk.LEFT, padx=(8, 0))
 
 
 class MainWindow(tk.Tk):
@@ -20,9 +49,8 @@ class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("小区-AOI空间匹配与室内站宏站分析工具")
-        self.geometry("720x680")
-        self.minsize(680, 600)
-        self.resizable(True, True)
+        self.geometry("520x680")
+        self.minsize(480, 600)
 
         try:
             from ctypes import windll
@@ -35,173 +63,188 @@ class MainWindow(tk.Tk):
         self._dialog = None
 
         # Main container
-        main = tk.Frame(self, padx=16, pady=16)
+        main = tk.Frame(self, padx=24, pady=24)
         main.pack(fill=tk.BOTH, expand=True)
 
         # Title
         tk.Label(
             main,
-            text="小区-AOI空间匹配与室内站宏站分析",
-            font=("Microsoft YaHei", 16, "bold"),
-        ).pack(pady=(0, 12))
+            text="小区-AOI空间匹配分析",
+            font=(FONT_FAMILY, 16, "bold"),
+            fg=DARK_GRAY,
+        ).pack(anchor="w")
+
+        tk.Label(
+            main,
+            text="上传数据文件，一键完成空间关联分析",
+            font=(FONT_FAMILY, 10),
+            fg=LIGHT_GRAY,
+        ).pack(anchor="w", pady=(2, 16))
 
         # --- AOI Section ---
-        aoi_group = tk.LabelFrame(main, text="AOI 数据", font=("Microsoft YaHei", 10, "bold"), padx=10, pady=8)
-        aoi_group.pack(fill=tk.X, pady=4)
+        aoi_group = tk.LabelFrame(main, text=" AOI 数据 ", font=(FONT_FAMILY, 10, "bold"), fg=RUST, padx=12, pady=10)
+        aoi_group.pack(fill=tk.X, pady=(0, 12))
 
         aoi_top = tk.Frame(aoi_group)
         aoi_top.pack(fill=tk.X)
-        tk.Button(
+        self.aoi_btn = tk.Button(
             aoi_top,
             text="选择文件",
-            font=("Microsoft YaHei", 9),
-            width=10,
+            font=(FONT_FAMILY, 9),
+            bg=RUST,
+            fg="white",
+            activebackground="#A34B1F",
+            activeforeground="white",
+            relief=tk.FLAT,
+            cursor="hand2",
             command=self._on_select_aoi,
-        ).pack(side=tk.LEFT)
-        self.aoi_path_label = tk.Label(aoi_top, text="未选择", fg="gray", font=("Microsoft YaHei", 9))
-        self.aoi_path_label.pack(side=tk.LEFT, padx=(8, 0))
-
-        self.aoi_status = tk.Label(aoi_group, text="", font=("Microsoft YaHei", 9))
-        self.aoi_status.pack(anchor=tk.W, pady=(4, 0))
-
-        self.aoi_mapping = MappingFrame(
-            aoi_group,
-            fields=[
-                ("场景名", "scene_col"),
-                ("边界 (WKT)", "boundary_col"),
-            ],
-            on_change=self._on_aoi_mapping_changed,
+            padx=12,
+            pady=4,
         )
-        self.aoi_mapping.pack(fill=tk.X, pady=(4, 0))
+        self.aoi_btn.pack(side=tk.LEFT)
+        self.aoi_path_label = tk.Label(aoi_top, text="未选择", fg=LIGHT_GRAY, font=(FONT_FAMILY, 9))
+        self.aoi_path_label.pack(side=tk.LEFT, padx=(10, 0))
+
+        aoi_fields = tk.Frame(aoi_group)
+        aoi_fields.pack(fill=tk.X, pady=(12, 0))
+        self.aoi_scene_row = _FieldRow(aoi_fields, "场景字段")
+        self.aoi_scene_row.pack(side=tk.LEFT, padx=(0, 20))
+        self.aoi_scene_row.combo.bind("<<ComboboxSelected>>", self._on_aoi_field_changed)
+
+        self.aoi_boundary_row = _FieldRow(aoi_fields, "边界字段")
+        self.aoi_boundary_row.pack(side=tk.LEFT)
+        self.aoi_boundary_row.combo.bind("<<ComboboxSelected>>", self._on_aoi_field_changed)
 
         # --- Site Section ---
-        site_group = tk.LabelFrame(main, text="站点数据", font=("Microsoft YaHei", 10, "bold"), padx=10, pady=8)
-        site_group.pack(fill=tk.X, pady=4)
+        site_group = tk.LabelFrame(main, text=" 站点数据 ", font=(FONT_FAMILY, 10, "bold"), fg=RUST, padx=12, pady=10)
+        site_group.pack(fill=tk.X, pady=(0, 12))
 
         site_top = tk.Frame(site_group)
         site_top.pack(fill=tk.X)
-        tk.Button(
+        self.site_btn = tk.Button(
             site_top,
             text="选择文件",
-            font=("Microsoft YaHei", 9),
-            width=10,
-            command=self._on_select_site,
-        ).pack(side=tk.LEFT)
-        self.site_path_label = tk.Label(site_top, text="未选择", fg="gray", font=("Microsoft YaHei", 9))
-        self.site_path_label.pack(side=tk.LEFT, padx=(8, 0))
-
-        self.site_status = tk.Label(site_group, text="", font=("Microsoft YaHei", 9))
-        self.site_status.pack(anchor=tk.W, pady=(4, 0))
-
-        self.site_mapping = MappingFrame(
-            site_group,
-            fields=[
-                ("站点名称", "name_col"),
-                ("经度", "lon_col"),
-                ("纬度", "lat_col"),
-                ("频段", "freq_col"),
-                ("覆盖类型", "coverage_type_col"),
-            ],
-            on_change=self._on_site_mapping_changed,
-        )
-        self.site_mapping.pack(fill=tk.X, pady=(4, 0))
-
-        # --- Validation Button ---
-        self.validate_btn = tk.Button(
-            main,
-            text="校验数据",
-            font=("Microsoft YaHei", 10, "bold"),
-            bg="#2196F3",
+            font=(FONT_FAMILY, 9),
+            bg=RUST,
             fg="white",
-            activebackground="#1976D2",
+            activebackground="#A34B1F",
             activeforeground="white",
-            width=14,
-            command=self._on_validate,
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=self._on_select_site,
+            padx=12,
+            pady=4,
         )
-        self.validate_btn.pack(pady=10)
+        self.site_btn.pack(side=tk.LEFT)
+        self.site_path_label = tk.Label(site_top, text="未选择", fg=LIGHT_GRAY, font=(FONT_FAMILY, 9))
+        self.site_path_label.pack(side=tk.LEFT, padx=(10, 0))
 
-        self.result_label = tk.Label(main, text="请选择 AOI 文件和站点文件", font=("Microsoft YaHei", 10), fg="#666")
-        self.result_label.pack()
+        site_fields = tk.Frame(site_group)
+        site_fields.pack(fill=tk.X, pady=(10, 0))
+        self.site_name_row = _FieldRow(site_fields, "名称")
+        self.site_name_row.pack(side=tk.LEFT, padx=(0, 16))
+        self.site_name_row.combo.bind("<<ComboboxSelected>>", self._on_site_field_changed)
 
-        # --- Output Path ---
-        out_group = tk.LabelFrame(main, text="输出文件", font=("Microsoft YaHei", 10, "bold"), padx=10, pady=6)
-        out_group.pack(fill=tk.X, pady=6)
+        self.site_lon_row = _FieldRow(site_fields, "经度")
+        self.site_lon_row.pack(side=tk.LEFT)
+        self.site_lon_row.combo.bind("<<ComboboxSelected>>", self._on_site_field_changed)
+
+        site_fields2 = tk.Frame(site_group)
+        site_fields2.pack(fill=tk.X, pady=(8, 0))
+        self.site_lat_row = _FieldRow(site_fields2, "纬度")
+        self.site_lat_row.pack(side=tk.LEFT, padx=(0, 16))
+        self.site_lat_row.combo.bind("<<ComboboxSelected>>", self._on_site_field_changed)
+
+        self.site_freq_row = _FieldRow(site_fields2, "频段")
+        self.site_freq_row.pack(side=tk.LEFT)
+        self.site_freq_row.combo.bind("<<ComboboxSelected>>", self._on_site_field_changed)
+
+        site_fields3 = tk.Frame(site_group)
+        site_fields3.pack(fill=tk.X, pady=(8, 0))
+        self.site_cover_row = _FieldRow(site_fields3, "覆盖类型")
+        self.site_cover_row.pack(side=tk.LEFT)
+        self.site_cover_row.combo.bind("<<ComboboxSelected>>", self._on_site_field_changed)
+
+        # --- Validate Section ---
+        validate_group = tk.LabelFrame(main, text=" 数据校验 ", font=(FONT_FAMILY, 10, "bold"), fg=RUST, padx=12, pady=10)
+        validate_group.pack(fill=tk.X, pady=(0, 12))
+
+        val_row = tk.Frame(validate_group)
+        val_row.pack(fill=tk.X)
+        self.validate_btn = tk.Button(
+            val_row,
+            text="校验数据",
+            font=(FONT_FAMILY, 9, "bold"),
+            bg=RUST,
+            fg="white",
+            activebackground="#A34B1F",
+            activeforeground="white",
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=self._on_validate,
+            padx=14,
+            pady=5,
+        )
+        self.validate_btn.pack(side=tk.LEFT)
+        self.result_label = tk.Label(val_row, text="请选择 AOI 文件和站点文件", fg=MID_GRAY, font=(FONT_FAMILY, 9))
+        self.result_label.pack(side=tk.LEFT, padx=(12, 0))
+
+        # --- Output Section ---
+        out_group = tk.LabelFrame(main, text=" 输出文件 ", font=(FONT_FAMILY, 10, "bold"), fg=RUST, padx=12, pady=10)
+        out_group.pack(fill=tk.X, pady=(0, 12))
+
         out_row = tk.Frame(out_group)
         out_row.pack(fill=tk.X)
-        self.output_entry = tk.Entry(out_row, font=("Microsoft YaHei", 9))
-        self.output_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
+        self.output_entry = tk.Entry(out_row, font=(FONT_FAMILY, 9), relief=tk.SUNKEN, bd=1)
+        self.output_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8), ipady=4)
         default_output = Path.cwd() / f"小区_AOI匹配_1000米限制_{time.strftime('%Y%m%d_%H%M%S')}.xlsx"
         self.output_entry.insert(0, str(default_output))
-        tk.Button(
+
+        self.browse_btn = tk.Button(
             out_row,
             text="浏览",
-            font=("Microsoft YaHei", 9),
-            width=8,
+            font=(FONT_FAMILY, 9),
+            bg=DARK_GRAY,
+            fg="white",
+            activebackground="#1F2937",
+            activeforeground="white",
+            relief=tk.FLAT,
+            cursor="hand2",
             command=self._on_browse_output,
-        ).pack(side=tk.RIGHT)
+            padx=12,
+            pady=4,
+        )
+        self.browse_btn.pack(side=tk.RIGHT)
 
         # --- Analyze Button ---
         self.analyze_btn = tk.Button(
             main,
             text="开始分析",
-            font=("Microsoft YaHei", 11, "bold"),
-            bg="#4CAF50",
+            font=(FONT_FAMILY, 12, "bold"),
+            bg=RUST,
             fg="white",
-            activebackground="#388E3C",
+            activebackground="#A34B1F",
             activeforeground="white",
-            width=16,
-            height=1,
+            relief=tk.FLAT,
+            cursor="hand2",
             state=tk.DISABLED,
             command=self._on_analyze,
+            padx=20,
+            pady=10,
         )
-        self.analyze_btn.pack(pady=8)
+        self.analyze_btn.pack(fill=tk.X, pady=(4, 0))
 
-        # --- Progress Bar in Main Window ---
-        self.progress_frame = tk.Frame(main)
-        self.progress_frame.pack(fill=tk.X, pady=4)
-        self.progress_bar = tk.Canvas(self.progress_frame, height=8, bg="#e0e0e0", highlightthickness=0)
-        self.progress_bar.pack(fill=tk.X)
+        # --- Progress Bar ---
+        self.progress_canvas = tk.Canvas(main, height=6, bg="#E5E7EB", highlightthickness=0)
+        self.progress_canvas.pack(fill=tk.X, pady=(16, 0))
         self._draw_progress(0)
 
-        # --- Preview ---
-        preview_group = tk.LabelFrame(main, text="数据预览", font=("Microsoft YaHei", 10, "bold"), padx=6, pady=6)
-        preview_group.pack(fill=tk.BOTH, expand=True, pady=4)
-        self.preview_tree = PreviewTree(preview_group)
-        self.preview_tree.pack(fill=tk.BOTH, expand=True)
-
-        # --- Summary ---
-        summary_group = tk.LabelFrame(main, text="分析摘要", font=("Microsoft YaHei", 10, "bold"), padx=6, pady=6)
-        summary_group.pack(fill=tk.X, pady=4)
-        self.summary_text = tk.Text(
-            summary_group,
-            height=5,
-            state=tk.DISABLED,
-            wrap=tk.WORD,
-            bg="#f7f7f7",
-            fg="#333333",
-            font=("Microsoft YaHei", 10),
-            relief=tk.FLAT,
-        )
-        self.summary_text.pack(fill=tk.BOTH, expand=True)
-
     def _draw_progress(self, percent: int):
-        self.progress_bar.delete("all")
-        width = self.progress_bar.winfo_width() or 200
+        self.progress_canvas.delete("all")
+        width = self.progress_canvas.winfo_width() or 200
         filled = int(width * percent / 100)
-        self.progress_bar.create_rectangle(0, 0, filled, 8, fill="#4CAF50", outline="")
-        self.progress_bar.create_rectangle(filled, 0, width, 8, fill="#e0e0e0", outline="")
-
-    def _update_mapping_status(self, mapping: ColumnMapping, label: tk.Label, kind: str):
-        missing = mapping.missing_aoi_fields() if kind == "aoi" else mapping.missing_site_fields()
-        if not missing:
-            label.config(text="✅ 字段已自动识别，可手动修改", fg="green")
-        else:
-            names = {
-                "scene_col": "场景名", "boundary_col": "边界",
-                "name_col": "站点名称", "lon_col": "经度", "lat_col": "纬度",
-                "freq_col": "频段", "coverage_type_col": "覆盖类型",
-            }
-            label.config(text=f"⚠️ 未识别字段: {', '.join(names.get(m, m) for m in missing)}，请手动选择", fg="orange")
+        self.progress_canvas.create_rectangle(0, 0, filled, 6, fill=RUST, outline="")
+        self.progress_canvas.create_rectangle(filled, 0, width, 6, fill="#E5E7EB", outline="")
 
     def _on_select_aoi(self):
         path = filedialog.askopenfilename(
@@ -212,10 +255,8 @@ class MainWindow(tk.Tk):
         if path:
             p = Path(path)
             self.vm.load_aoi_file(p)
-            self.aoi_path_label.config(text=str(p), fg="black")
-            self.aoi_mapping.set_columns(self.vm.aoi_columns)
-            self.aoi_mapping.set_mapping(self.vm.aoi_mapping)
-            self._update_mapping_status(self.vm.aoi_mapping, self.aoi_status, "aoi")
+            self.aoi_path_label.config(text=str(p.name), fg=DARK_GRAY)
+            self._update_aoi_combos()
             self._reset_analysis_state()
 
     def _on_select_site(self):
@@ -227,27 +268,52 @@ class MainWindow(tk.Tk):
         if path:
             p = Path(path)
             self.vm.load_site_file(p)
-            self.site_path_label.config(text=str(p), fg="black")
-            self.site_mapping.set_columns(self.vm.site_columns)
-            self.site_mapping.set_mapping(self.vm.site_mapping)
-            self._update_mapping_status(self.vm.site_mapping, self.site_status, "site")
+            self.site_path_label.config(text=str(p.name), fg=DARK_GRAY)
+            self._update_site_combos()
             self._reset_analysis_state()
 
-    def _on_aoi_mapping_changed(self, mapping: ColumnMapping):
+    def _update_aoi_combos(self):
+        columns = [""] + self.vm.aoi_columns
+        self.aoi_scene_row.combo.config(values=columns)
+        self.aoi_boundary_row.combo.config(values=columns)
+        self.aoi_scene_row.combo.set(self.vm.aoi_mapping.scene_col)
+        self.aoi_boundary_row.combo.set(self.vm.aoi_mapping.boundary_col)
+
+    def _update_site_combos(self):
+        columns = [""] + self.vm.site_columns
+        self.site_name_row.combo.config(values=columns)
+        self.site_lon_row.combo.config(values=columns)
+        self.site_lat_row.combo.config(values=columns)
+        self.site_freq_row.combo.config(values=columns)
+        self.site_cover_row.combo.config(values=columns)
+        self.site_name_row.combo.set(self.vm.site_mapping.name_col)
+        self.site_lon_row.combo.set(self.vm.site_mapping.lon_col)
+        self.site_lat_row.combo.set(self.vm.site_mapping.lat_col)
+        self.site_freq_row.combo.set(self.vm.site_mapping.freq_col)
+        self.site_cover_row.combo.set(self.vm.site_mapping.coverage_type_col)
+
+    def _on_aoi_field_changed(self, _event=None):
+        mapping = ColumnMapping(
+            scene_col=self.aoi_scene_row.combo.get(),
+            boundary_col=self.aoi_boundary_row.combo.get(),
+        )
         self.vm.set_aoi_mapping(mapping)
-        self._update_mapping_status(mapping, self.aoi_status, "aoi")
         self._reset_analysis_state()
 
-    def _on_site_mapping_changed(self, mapping: ColumnMapping):
+    def _on_site_field_changed(self, _event=None):
+        mapping = ColumnMapping(
+            name_col=self.site_name_row.combo.get(),
+            lon_col=self.site_lon_row.combo.get(),
+            lat_col=self.site_lat_row.combo.get(),
+            freq_col=self.site_freq_row.combo.get(),
+            coverage_type_col=self.site_cover_row.combo.get(),
+        )
         self.vm.set_site_mapping(mapping)
-        self._update_mapping_status(mapping, self.site_status, "site")
         self._reset_analysis_state()
 
     def _reset_analysis_state(self):
         self.analyze_btn.config(state=tk.DISABLED)
-        self.result_label.config(text="请先点击【校验数据】检查文件格式", fg="#666")
-        self.preview_tree.clear()
-        self._set_summary_text("")
+        self.result_label.config(text="请先点击【校验数据】检查文件格式", fg=MID_GRAY)
         self._draw_progress(0)
 
     def _on_browse_output(self):
@@ -273,18 +339,12 @@ class MainWindow(tk.Tk):
 
             result: ValidationResult = self.vm.validate()
             if result.is_valid:
-                self.result_label.config(text="✅ 校验通过，可以点击【开始分析】", fg="green")
+                self.result_label.config(text="校验通过，可以点击【开始分析】", fg="#16A34A")
                 self.analyze_btn.config(state=tk.NORMAL)
             else:
-                self.result_label.config(text="❌ 校验失败，请检查字段映射与数据格式", fg="red")
+                self.result_label.config(text="校验失败，请检查字段映射与数据格式", fg=RUST)
                 self.analyze_btn.config(state=tk.DISABLED)
                 messagebox.showerror(parent=self, title="校验失败", message="\n".join(result.errors))
-
-            if result.preview_rows:
-                columns = list(result.preview_rows[0].keys())
-                self.preview_tree.set_data(columns, result.preview_rows)
-            else:
-                self.preview_tree.clear()
         except Exception as exc:
             messagebox.showerror(parent=self, title="校验异常", message=str(exc))
 
@@ -347,30 +407,27 @@ class MainWindow(tk.Tk):
                 dialog.close()
                 self.analyze_btn.config(state=tk.NORMAL, text="开始分析")
                 self._draw_progress(0)
-                messagebox.showerror(parent=self, title="分析失败", message=item[1])
+                # Delay messagebox on macOS to avoid grab/focus deadlock
+                self.after(50, lambda msg=item[1]: messagebox.showerror(parent=self, title="分析失败", message=msg))
                 return
             elif item[0] == "success":
                 dialog.close()
                 self.analyze_btn.config(state=tk.NORMAL, text="开始分析")
                 self._draw_progress(100)
-                summary = self.vm.analysis_result.summary
-                text = (
-                    f"分析完成！结果已保存。\n"
-                    f"总站点数：{summary.total_sites}  |  "
-                    f"AOI已匹配：{summary.aoi_matched}  |  "
-                    f"室内站：{summary.indoor_sites}  |  "
-                    f"室外站：{summary.outdoor_sites}  |  "
-                    f"1000米内找到室外站：{summary.indoor_with_outdoor}"
-                )
-                self._set_summary_text(text)
-                messagebox.showinfo(parent=self, title="完成", message=f"结果已保存至：{item[1]}")
+                summary = getattr(self.vm.analysis_result, "summary", None)
+                if summary:
+                    text = (
+                        f"分析完成！结果已保存至 {item[1]}\n"
+                        f"总站点数：{summary.total_sites}  |  "
+                        f"AOI已匹配：{summary.aoi_matched}  |  "
+                        f"室内站：{summary.indoor_sites}  |  "
+                        f"室外站：{summary.outdoor_sites}  |  "
+                        f"1000米内找到室外站：{summary.indoor_with_outdoor}"
+                    )
+                else:
+                    text = f"分析完成！结果已保存至 {item[1]}"
+                self.result_label.config(text=text, fg="#16A34A")
                 return
 
         if not updated:
             self.after(100, self._check_analysis_result, dialog)
-
-    def _set_summary_text(self, text: str):
-        self.summary_text.config(state=tk.NORMAL)
-        self.summary_text.delete("1.0", tk.END)
-        self.summary_text.insert(tk.END, text)
-        self.summary_text.config(state=tk.DISABLED)

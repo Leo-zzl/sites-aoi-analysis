@@ -7,3 +7,8 @@ __pycache__/
 !基站站点样例数据.xlsx
 小区_AOI匹配_*.xlsx
 .claude/settings.local.json
+*.egg-info/
+check_gui.py
+launch_debug.py
+main_debug.py
+diagnose_gui.py
