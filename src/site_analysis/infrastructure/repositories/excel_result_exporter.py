@@ -6,7 +6,7 @@ from typing import List
 import pandas as pd
 
 from site_analysis.domain.models import Site
-from site_analysis.domain.value_objects import AnalysisResult
+from site_analysis.domain.value_objects import AnalysisResult, AnalysisSummary
 
 
 class ExcelResultExporter:
@@ -52,6 +52,32 @@ class ExcelResultExporter:
             CoverageType.UNKNOWN: "未知",
         }
         return mapping.get(coverage_type, "未知")
+
+    def export_with_summary(
+        self, sites: List[Site], summary: AnalysisSummary, output_path: Path
+    ) -> None:
+        """Export results and summary to an Excel file with two sheets."""
+        df_results = self.to_dataframe(sites)
+        df_summary = pd.DataFrame({
+            "指标": [
+                "总站点数",
+                "AOI已匹配",
+                "室内站总数",
+                "室外站总数",
+                "1000米内找到室外站",
+            ],
+            "数值": [
+                summary.total_sites,
+                summary.aoi_matched,
+                summary.indoor_sites,
+                summary.outdoor_sites,
+                summary.indoor_with_outdoor,
+            ],
+        })
+
+        with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+            df_summary.to_excel(writer, sheet_name="Summary", index=False)
+            df_results.to_excel(writer, sheet_name="Results", index=False)
 
     def to_dataframe(self, sites: List[Site]) -> pd.DataFrame:
         """Return results as a DataFrame without writing to disk."""

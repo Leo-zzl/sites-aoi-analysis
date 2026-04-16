@@ -31,17 +31,16 @@ def main(
     result = service.run()
 
     print(f"💾 保存至: {output_file}")
-    exporter.export(result.sites, output_file)
+    exporter.export_with_summary(result.sites, result.summary, output_file)
 
-    df = result.to_dataframe()
+    summary = result.summary
     print("\n📈 结果统计：")
-    print(f"   总站点数：{len(df):,}")
-    print(f"   AOI已匹配：{(df['AOI匹配状态'] == '已匹配').sum():,}")
-    indoor_total = (df["覆盖类型"] == "室内").sum()
-    indoor_with_outdoor = df["最近室外站_距离_米"].notna().sum()
-    print(f"   室内站总数：{indoor_total:,}")
-    print(f"   1000米内找到室外站：{indoor_with_outdoor:,}")
-    print(f"   1000米内未找到室外站：{indoor_total - indoor_with_outdoor:,}")
+    print(f"   总站点数：{summary.total_sites:,}")
+    print(f"   AOI已匹配：{summary.aoi_matched:,}")
+    print(f"   室内站总数：{summary.indoor_sites:,}")
+    print(f"   室外站总数：{summary.outdoor_sites:,}")
+    print(f"   1000米内找到室外站：{summary.indoor_with_outdoor:,}")
+    print(f"   1000米内未找到室外站：{summary.indoor_sites - summary.indoor_with_outdoor:,}")
     print(f"\n🎉 完成！文件路径：{output_file}")
 
 

@@ -1,24 +1,52 @@
 """Excel-backed AOI repository."""
 
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 from shapely.wkt import loads as wkt_loads
 
 from site_analysis.domain.models import AOI
+from site_analysis.domain.value_objects import ColumnMapping
 from site_analysis.infrastructure.repositories import AoiRepository
 
 
 class ExcelAoiRepository(AoiRepository):
     """Load AOI records from an Excel file."""
 
-    def __init__(self, file_path: Path):
+    def __init__(self, file_path: Path, column_mapping: Optional[ColumnMapping] = None):
         self.file_path = file_path
+        self.column_mapping = column_mapping
 
     def load_all(self) -> List[AOI]:
         df = pd.read_excel(self.file_path, sheet_name=0)
         aois = []
+
+        if self.column_mapping is not None:
+            scene_col = self.column_mapping.scene_col
+            boundary_col = self.column_mapping.boundary_col
+            for _, row in df.iterrows():
+                wkt_str = str(row.get(boundary_col, "")).strip()
+                wkt_str = wkt_str.strip('"').strip("'").strip()
+                if not wkt_str or wkt_str.lower() == "nan":
+                    continue
+                try:
+                    polygon = wkt_loads(wkt_str)
+                except Exception:
+                    continue
+                aois.append(
+                    AOI(
+                        province="",
+                        city="",
+                        scene=str(row.get(scene_col, "")).strip(),
+                        scene_big="",
+                        scene_small="",
+                        geometry=polygon,
+                    )
+                )
+            return aois
+
+        # Legacy path: hard-coded column positions
         for _, row in df.iterrows():
             wkt_str = str(row.iloc[6]).strip()
             wkt_str = wkt_str.strip('"').strip("'").strip()

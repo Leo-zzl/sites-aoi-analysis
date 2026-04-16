@@ -6,7 +6,10 @@ from pathlib import Path
 # Add src/ to Python path when running directly
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from site_analysis.interfaces.cli import main
-
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--gui":
+        from site_analysis.interfaces.gui.app import run_gui
+        run_gui()
+    else:
+        from site_analysis.interfaces.cli import main
+        main()

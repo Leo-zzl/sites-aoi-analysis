@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 import pandas as pd
 
 from site_analysis.domain.models import Site
-from site_analysis.domain.value_objects import CoverageType
+from site_analysis.domain.value_objects import ColumnMapping, CoverageType
 from site_analysis.infrastructure.repositories import SiteRepository
 
 COL_SITE_NAME = "小区名称"
@@ -31,12 +31,46 @@ def _find_lat_lon_columns(df: pd.DataFrame) -> Tuple[Optional[str], Optional[str
 class ExcelSiteRepository(SiteRepository):
     """Load site records from an Excel file."""
 
-    def __init__(self, file_path: Path):
+    def __init__(self, file_path: Path, column_mapping: Optional[ColumnMapping] = None):
         self.file_path = file_path
+        self.column_mapping = column_mapping
 
     def load_all(self) -> List[Site]:
         df = pd.read_excel(self.file_path, sheet_name=0)
 
+        if self.column_mapping is not None:
+            name_col = self.column_mapping.name_col
+            lon_col = self.column_mapping.lon_col
+            lat_col = self.column_mapping.lat_col
+            freq_col = self.column_mapping.freq_col
+            coverage_type_col = self.column_mapping.coverage_type_col
+
+            df[lon_col] = pd.to_numeric(df[lon_col], errors="coerce")
+            df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")
+            valid_mask = df[lon_col].notna() & df[lat_col].notna()
+            df = df[valid_mask].reset_index(drop=True)
+
+            core_cols = {name_col, lon_col, lat_col, freq_col, coverage_type_col}
+            sites = []
+            for _, row in df.iterrows():
+                extra = {
+                    col: row[col]
+                    for col in df.columns
+                    if col not in core_cols
+                }
+                sites.append(
+                    Site(
+                        name=str(row[name_col]),
+                        freq=str(row[freq_col]),
+                        coverage_type=CoverageType.classify(row[coverage_type_col]),
+                        lon=float(row[lon_col]),
+                        lat=float(row[lat_col]),
+                        extra_data=extra,
+                    )
+                )
+            return sites
+
+        # Legacy path: auto-detect columns
         for col in [COL_SITE_NAME, COL_FREQ, COL_COVER_TYPE]:
             if col not in df.columns:
                 raise KeyError(f"❌ 找不到列 '{col}'")

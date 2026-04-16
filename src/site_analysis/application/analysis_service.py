@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from site_analysis.domain.models import AOI, Site
-from site_analysis.domain.value_objects import AnalysisResult, UtmZone
+from site_analysis.domain.value_objects import AnalysisResult, AnalysisSummary, UtmZone
 from site_analysis.infrastructure.geo.projection import project_sites_to_utm
 from site_analysis.infrastructure.geo.spatial_index import SpatialIndex
 from site_analysis.infrastructure.repositories import AoiRepository, SiteRepository
@@ -36,7 +36,8 @@ class SiteAnalysisService:
         self._match_aois(aois, sites)
         self._find_nearest_outdoor(sites)
 
-        return AnalysisResultContainer(sites)
+        summary = AnalysisSummary.from_sites(sites)
+        return AnalysisResultContainer(sites, summary=summary)
 
     @staticmethod
     def _match_aois(aois: List[AOI], sites: List[Site]) -> None:
@@ -115,8 +116,9 @@ class SiteAnalysisService:
 class AnalysisResultContainer:
     """Wrapper around the analysis output."""
 
-    def __init__(self, sites: List[Site]):
+    def __init__(self, sites: List[Site], summary: AnalysisSummary = None):
         self.sites = sites
+        self.summary = summary or AnalysisSummary.from_sites(sites)
 
     def to_dataframe(self):
         exporter = ExcelResultExporter()
