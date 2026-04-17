@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>小区-AOI空间匹配分析</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>小区-AOI空间匹配分析</h1>
+      <p class="subtitle">上传数据文件，一键完成空间关联分析</p>
+    </header>
+
+    <section class="card">
+      <h2 class="card-title">AOI 数据</h2>
+      <div class="file-row">
+        <button id="aoi-btn" class="btn btn-primary">选择文件</button>
+        <span id="aoi-name" class="file-name">未选择文件</span>
+      </div>
+      <div class="field-row">
+        <label>场景字段</label>
+        <select id="aoi-scene"></select>
+      </div>
+      <div class="field-row">
+        <label>边界字段</label>
+        <select id="aoi-boundary"></select>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">站点数据</h2>
+      <div class="file-row">
+        <button id="site-btn" class="btn btn-primary">选择文件</button>
+        <span id="site-name" class="file-name">未选择文件</span>
+      </div>
+      <div class="field-grid">
+        <div class="field-row">
+          <label>名称</label>
+          <select id="site-name-col"></select>
+        </div>
+        <div class="field-row">
+          <label>经度</label>
+          <select id="site-lon"></select>
+        </div>
+        <div class="field-row">
+          <label>纬度</label>
+          <select id="site-lat"></select>
+        </div>
+        <div class="field-row">
+          <label>频段</label>
+          <select id="site-freq"></select>
+        </div>
+      </div>
+      <div class="field-row full">
+        <label>覆盖类型</label>
+        <select id="site-cover"></select>
+      </div>
+    </section>
+
+    <section class="card validate-card">
+      <div class="validate-row">
+        <button id="validate-btn" class="btn btn-primary">校验数据</button>
+        <span id="validate-msg" class="validate-msg">请选择 AOI 文件和站点文件</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">输出文件</h2>
+      <div class="output-row">
+        <input id="output-path" type="text" readonly />
+        <button id="browse-btn" class="btn btn-secondary">浏览</button>
+      </div>
+    </section>
+
+    <button id="analyze-btn" class="btn btn-analyze" disabled>开始分析</button>
+
+    <div class="progress-wrap">
+      <div class="progress-bar">
+        <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+      </div>
+      <p id="progress-text" class="progress-text"></p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

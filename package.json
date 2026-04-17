@@ -1,0 +1,31 @@
+{
+  "name": "sites_in_aoi",
+  "version": "1.0.0",
+  "description": "本工具用于无线通信网络规划中的**站点-AOI空间关联分析**，包含两大核心功能：",
+  "main": "electron/main.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Leo-zzl/sites-aoi-analysis.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Leo-zzl/sites-aoi-analysis/issues"
+  },
+  "homepage": "https://github.com/Leo-zzl/sites-aoi-analysis#readme",
+  "devDependencies": {
+    "electron": "^41.2.1"
+  },
+  "dependencies": {
+    "form-data": "^4.0.5"
+  }
+}

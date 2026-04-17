@@ -12,3 +12,4 @@ check_gui.py
 launch_debug.py
 main_debug.py
 diagnose_gui.py
+node_modules/

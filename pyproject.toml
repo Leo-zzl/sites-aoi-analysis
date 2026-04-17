@@ -14,6 +14,9 @@ dependencies = [
     "shapely",
     "openpyxl",
     "scipy",
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
 ]
 
 [project.optional-dependencies]
@@ -21,6 +24,7 @@ dev = [
     "pytest",
     "pytest-benchmark",
     "ruff",
+    "httpx",
 ]
 
 [tool.setuptools.packages.find]
