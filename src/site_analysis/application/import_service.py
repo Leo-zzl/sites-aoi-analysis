@@ -9,8 +9,45 @@ from shapely.wkt import loads as wkt_loads
 from site_analysis.domain.value_objects import ColumnMapping, FileType, ValidationResult
 
 
+# Keyword sets for auto-detection (migrated from gui/view_model.py)
+_NAME_KEYWORDS = {"小区名称", "站点名", "name", "站点名称", "小区"}
+_LON_KEYWORDS = {"经度", "lon", "longitude", "x", "lng"}
+_LAT_KEYWORDS = {"纬度", "lat", "latitude", "y"}
+_FREQ_KEYWORDS = {"使用频段", "频段", "freq", "frequency"}
+_COVERAGE_KEYWORDS = {"覆盖类型", "类型", "cover", "coverage", "covertype"}
+_SCENE_KEYWORDS = {"场景", "scene", "场景名", "场景名称"}
+_BOUNDARY_KEYWORDS = {"边界", "boundary", "wkt", "边界WKT", "物业边界", "polygon"}
+
+
 class ImportService:
     """Orchestrates file preview and column-mapping validation."""
+
+    @staticmethod
+    def detect_column(columns: List[str], keywords: set) -> str:
+        """Return the first column that matches any keyword (case-insensitive)."""
+        for c in columns:
+            col_clean = str(c).strip().lower().replace(" ", "").replace("_", "")
+            if col_clean in keywords or any(k in col_clean for k in keywords):
+                return c
+        return ""
+
+    @staticmethod
+    def suggest_mapping(columns: List[str], file_type: str) -> ColumnMapping:
+        """Suggest column mapping based on auto-detection keywords."""
+        if file_type == "aoi":
+            return ColumnMapping(
+                scene_col=ImportService.detect_column(columns, _SCENE_KEYWORDS),
+                boundary_col=ImportService.detect_column(columns, _BOUNDARY_KEYWORDS),
+            )
+        if file_type == "site":
+            return ColumnMapping(
+                name_col=ImportService.detect_column(columns, _NAME_KEYWORDS),
+                lon_col=ImportService.detect_column(columns, _LON_KEYWORDS),
+                lat_col=ImportService.detect_column(columns, _LAT_KEYWORDS),
+                freq_col=ImportService.detect_column(columns, _FREQ_KEYWORDS),
+                coverage_type_col=ImportService.detect_column(columns, _COVERAGE_KEYWORDS),
+            )
+        raise ValueError(f"Unknown file_type: {file_type}")
 
     @staticmethod
     def preview_columns(file_path: Path) -> List[str]:

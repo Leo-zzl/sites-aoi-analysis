@@ -22,7 +22,7 @@ from site_analysis.application.import_service import ImportService
 from site_analysis.domain.value_objects import ColumnMapping, ValidationResult
 from site_analysis.infrastructure.repositories.excel_result_exporter import ExcelResultExporter
 from site_analysis.infrastructure.repositories.repository_factory import RepositoryFactory
-from site_analysis.interfaces.gui.view_model import MainViewModel
+
 
 
 def _clean_preview_rows(rows: List[Dict]) -> List[Dict]:
@@ -78,24 +78,21 @@ def upload_file(file_type: str = Form(...), file: UploadFile = File(...)):
     with dest.open("wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    vm = MainViewModel()
+    columns = ImportService.preview_columns(dest)
+    suggested = ImportService.suggest_mapping(columns, file_type)
     if file_type == "aoi":
-        vm.load_aoi_file(dest)
         mapping = {
-            "scene_col": vm.aoi_mapping.scene_col,
-            "boundary_col": vm.aoi_mapping.boundary_col,
+            "scene_col": suggested.scene_col,
+            "boundary_col": suggested.boundary_col,
         }
-        columns = vm.aoi_columns
     elif file_type == "site":
-        vm.load_site_file(dest)
         mapping = {
-            "name_col": vm.site_mapping.name_col,
-            "lon_col": vm.site_mapping.lon_col,
-            "lat_col": vm.site_mapping.lat_col,
-            "freq_col": vm.site_mapping.freq_col,
-            "coverage_type_col": vm.site_mapping.coverage_type_col,
+            "name_col": suggested.name_col,
+            "lon_col": suggested.lon_col,
+            "lat_col": suggested.lat_col,
+            "freq_col": suggested.freq_col,
+            "coverage_type_col": suggested.coverage_type_col,
         }
-        columns = vm.site_columns
     else:
         return {"error": "file_type must be 'aoi' or 'site'"}
 

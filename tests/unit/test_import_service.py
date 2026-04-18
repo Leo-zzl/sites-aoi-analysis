@@ -9,6 +9,56 @@ import pytest
 from site_analysis.domain.value_objects import ColumnMapping
 
 
+class TestColumnMappingSuggestion:
+    """Test auto-detection of column mappings (P1-T01)."""
+
+    def test_detect_column_exact_match(self):
+        from site_analysis.application.import_service import ImportService
+
+        columns = ["场景", "边界WKT", "备注"]
+        result = ImportService.detect_column(columns, {"场景", "scene"})
+        assert result == "场景"
+
+    def test_detect_column_fuzzy_match(self):
+        from site_analysis.application.import_service import ImportService
+
+        columns = ["小区名称", "经度", "纬度"]
+        result = ImportService.detect_column(columns, {"经度", "lon", "longitude"})
+        assert result == "经度"
+
+    def test_detect_column_no_match(self):
+        from site_analysis.application.import_service import ImportService
+
+        columns = ["A", "B", "C"]
+        result = ImportService.detect_column(columns, {"场景", "scene"})
+        assert result == ""
+
+    def test_suggest_mapping_aoi(self):
+        from site_analysis.application.import_service import ImportService
+
+        columns = ["场景", "边界WKT", "备注"]
+        mapping = ImportService.suggest_mapping(columns, "aoi")
+        assert mapping.scene_col == "场景"
+        assert mapping.boundary_col == "边界WKT"
+
+    def test_suggest_mapping_site(self):
+        from site_analysis.application.import_service import ImportService
+
+        columns = ["小区名称", "经度", "纬度", "使用频段", "覆盖类型"]
+        mapping = ImportService.suggest_mapping(columns, "site")
+        assert mapping.name_col == "小区名称"
+        assert mapping.lon_col == "经度"
+        assert mapping.lat_col == "纬度"
+        assert mapping.freq_col == "使用频段"
+        assert mapping.coverage_type_col == "覆盖类型"
+
+    def test_suggest_mapping_unknown_type_raises(self):
+        from site_analysis.application.import_service import ImportService
+
+        with pytest.raises(ValueError, match="Unknown file_type"):
+            ImportService.suggest_mapping(["A"], "unknown")
+
+
 class TestImportService:
     """Test column preview and validation logic."""
 

@@ -80,10 +80,33 @@
     </div>
 
     <div class="progress-wrap">
-      <div class="progress-bar">
+      <div class="progress-bar" id="progress-bar">
         <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
       </div>
-      <p id="progress-text" class="progress-text"></p>
+      <div class="progress-meta">
+        <span id="progress-stage" class="progress-stage"></span>
+        <span class="progress-dots" id="progress-dots"><span></span><span></span><span></span></span>
+      </div>
+      <p id="progress-detail" class="progress-detail"></p>
+      <div id="progress-log" class="progress-log"></div>
+    </div>
+
+    <div id="summary-card" class="summary-card" style="display:none">
+      <h3 class="summary-title">📊 分析摘要</h3>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div id="sum-total" class="summary-value">0</div>
+          <div class="summary-label">总站点数</div>
+        </div>
+        <div class="summary-item">
+          <div id="sum-aoi" class="summary-value">0</div>
+          <div class="summary-label">AOI 已匹配</div>
+        </div>
+        <div class="summary-item">
+          <div id="sum-indoor" class="summary-value">0</div>
+          <div class="summary-label">室内站找到室外站</div>
+        </div>
+      </div>
     </div>
   </div>
 

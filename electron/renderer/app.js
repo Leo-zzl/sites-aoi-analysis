@@ -11,6 +11,11 @@ let state = {
   jobId: null,
 };
 
+let progressState = {
+  steps: [],
+  isRunning: false,
+};
+
 const els = {
   aoiBtn: document.getElementById('aoi-btn'),
   aoiName: document.getElementById('aoi-name'),
@@ -33,8 +38,16 @@ const els = {
 
   analyzeBtn: document.getElementById('analyze-btn'),
   stopBtn: document.getElementById('stop-btn'),
+  progressBar: document.getElementById('progress-bar'),
   progressFill: document.getElementById('progress-fill'),
-  progressText: document.getElementById('progress-text'),
+  progressStage: document.getElementById('progress-stage'),
+  progressDots: document.getElementById('progress-dots'),
+  progressDetail: document.getElementById('progress-detail'),
+  progressLog: document.getElementById('progress-log'),
+  summaryCard: document.getElementById('summary-card'),
+  sumTotal: document.getElementById('sum-total'),
+  sumAoi: document.getElementById('sum-aoi'),
+  sumIndoor: document.getElementById('sum-indoor'),
 };
 
 function defaultOutputName() {
@@ -159,7 +172,6 @@ els.outputPath.value = defaultOutputName();
 els.analyzeBtn.addEventListener('click', async () => {
   if (!state.valid) return;
 
-  // Ensure output path is set before starting
   let outPath = els.outputPath.value.trim();
   if (!outPath) {
     const chosen = await window.electronAPI.saveFile(defaultOutputName());
@@ -169,7 +181,8 @@ els.analyzeBtn.addEventListener('click', async () => {
   }
 
   setAnalyzing(true);
-  setProgress(5, '准备分析...');
+  resetProgress();
+  updateProgress({ stage: 5, message: '准备分析...', detail: '' });
 
   const params = {
     aoi_session_id: state.aoiSessionId,
@@ -187,7 +200,7 @@ els.analyzeBtn.addEventListener('click', async () => {
   const res = await window.electronAPI.analyze(params);
   if (res.error) {
     setAnalyzing(false);
-    setProgress(0, '');
+    resetProgress();
     showError('分析失败', res.error);
     return;
   }
@@ -198,7 +211,7 @@ els.analyzeBtn.addEventListener('click', async () => {
 
 els.stopBtn.addEventListener('click', async () => {
   if (!state.jobId) return;
-  setProgress(els.progressFill.style.width.replace('%', ''), '正在取消...');
+  updateProgress({ stage: parseInt(els.progressFill.style.width) || 0, message: '正在取消...', detail: '' });
   try {
     await fetch(`${API_BASE}/cancel/${state.jobId}`, { method: 'POST' });
   } catch (e) {
@@ -206,12 +219,92 @@ els.stopBtn.addEventListener('click', async () => {
   }
 });
 
-function setProgress(percent, text) {
-  els.progressFill.style.width = `${percent}%`;
-  els.progressText.textContent = text || '';
+// Progress state machine
+function resetProgress() {
+  progressState.steps = [];
+  progressState.isRunning = false;
+  els.progressFill.style.width = '0%';
+  els.progressBar.classList.remove('active');
+  els.progressStage.textContent = '';
+  els.progressDetail.textContent = '';
+  els.progressLog.innerHTML = '';
+  els.progressDots.classList.add('hidden');
+  els.summaryCard.style.display = 'none';
+}
+
+function updateProgress(data) {
+  const { stage, message, detail } = data;
+
+  // Update bar
+  els.progressFill.style.width = `${stage}%`;
+
+  // Update current stage text
+  if (message) {
+    els.progressStage.textContent = message;
+  }
+  if (detail) {
+    els.progressDetail.textContent = detail;
+  }
+
+  // Find or create step
+  const existingIndex = progressState.steps.findIndex((s) => s.message === message);
+  if (existingIndex >= 0) {
+    // Update existing step detail
+    progressState.steps[existingIndex].stage = stage;
+    progressState.steps[existingIndex].detail = detail;
+    progressState.steps[existingIndex].status = 'doing';
+  } else {
+    // Mark previous doing as done
+    progressState.steps.forEach((s) => {
+      if (s.status === 'doing') s.status = 'done';
+    });
+    // Add new step
+    progressState.steps.push({ stage, message, detail, status: 'doing' });
+  }
+
+  renderProgressLog();
+}
+
+function renderProgressLog() {
+  els.progressLog.innerHTML = '';
+  progressState.steps.forEach((step, index) => {
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${step.status}`;
+
+    const icon = document.createElement('div');
+    icon.className = `log-icon ${step.status}`;
+    if (step.status === 'done') icon.textContent = '✓';
+    else if (step.status === 'doing') icon.textContent = (index + 1).toString();
+    else if (step.status === 'pending') icon.textContent = (index + 1).toString();
+    else if (step.status === 'error') icon.textContent = '!';
+
+    const body = document.createElement('div');
+    body.className = 'log-body';
+
+    const title = document.createElement('div');
+    title.className = 'log-title';
+    title.textContent = step.message;
+
+    body.appendChild(title);
+
+    if (step.detail) {
+      const detail = document.createElement('div');
+      detail.className = 'log-detail';
+      detail.textContent = step.detail;
+      body.appendChild(detail);
+    }
+
+    entry.appendChild(icon);
+    entry.appendChild(body);
+    els.progressLog.appendChild(entry);
+  });
+
+  // Auto-scroll to bottom
+  els.progressLog.scrollTop = els.progressLog.scrollHeight;
 }
 
 function setAnalyzing(active) {
+  progressState.isRunning = active;
   els.analyzeBtn.disabled = active;
   els.analyzeBtn.textContent = active ? '分析中...' : '开始分析';
   els.stopBtn.style.display = active ? 'inline-flex' : 'none';
@@ -222,6 +315,22 @@ function setAnalyzing(active) {
   [els.aoiScene, els.aoiBoundary, els.siteNameCol, els.siteLon, els.siteLat, els.siteFreq, els.siteCover].forEach((el) => {
     el.disabled = active;
   });
+
+  if (active) {
+    els.progressBar.classList.add('active');
+    els.progressDots.classList.remove('hidden');
+  } else {
+    els.progressBar.classList.remove('active');
+    els.progressDots.classList.add('hidden');
+  }
+}
+
+function renderSummaryCard(summary) {
+  if (!summary) return;
+  els.sumTotal.textContent = summary.total_sites || 0;
+  els.sumAoi.textContent = summary.aoi_matched || 0;
+  els.sumIndoor.textContent = summary.indoor_with_outdoor || 0;
+  els.summaryCard.style.display = 'block';
 }
 
 function connectProgress(jobId) {
@@ -229,7 +338,7 @@ function connectProgress(jobId) {
 
   es.addEventListener('progress', (e) => {
     const data = JSON.parse(e.data);
-    setProgress(data.stage, data.message + (data.detail ? ` (${data.detail})` : ''));
+    updateProgress(data);
   });
 
   es.addEventListener('complete', async (e) => {
@@ -238,22 +347,35 @@ function connectProgress(jobId) {
     setAnalyzing(false);
 
     if (data.cancelled) {
-      setProgress(0, '已取消');
+      // Mark current step as error
+      const current = progressState.steps.find((s) => s.status === 'doing');
+      if (current) current.status = 'error';
+      renderProgressLog();
       els.validateMsg.textContent = '分析已取消';
       els.validateMsg.className = 'validate-msg error';
       return;
     }
 
     if (data.error) {
-      setProgress(0, '');
+      const current = progressState.steps.find((s) => s.status === 'doing');
+      if (current) {
+        current.status = 'error';
+        current.detail = data.error;
+      }
+      renderProgressLog();
       showError('分析失败', data.error + '\n' + (data.traceback || ''));
       return;
     }
 
-    setProgress(100, '分析完成');
+    // Mark all as done
+    progressState.steps.forEach((s) => {
+      if (s.status === 'doing') s.status = 'done';
+    });
+    renderProgressLog();
 
     const status = await window.electronAPI.jobStatus(jobId);
     if (status.summary) {
+      renderSummaryCard(status.summary);
       const s = status.summary;
       els.validateMsg.innerHTML =
         `分析完成！总站点数：${s.total_sites}  |  AOI已匹配：${s.aoi_matched}  |  室内站：${s.indoor_sites}  |  室外站：${s.outdoor_sites}  |  1000米内找到室外站：${s.indoor_with_outdoor}`;
@@ -261,12 +383,6 @@ function connectProgress(jobId) {
     } else {
       els.validateMsg.textContent = '分析完成';
       els.validateMsg.className = 'validate-msg success';
-    }
-
-    // Result is already saved to the user-selected path; no download needed
-    const outPath = els.outputPath.value;
-    if (outPath) {
-      setProgress(100, `结果已保存至：${outPath}`);
     }
   });
 
