@@ -8,6 +8,8 @@ __pycache__/
 小区_AOI匹配_*.xlsx
 .claude/settings.local.json
 *.egg-info/
+tests/fixtures/stress_*.xlsx
+tests/fixtures/stress_*.csv
 check_gui.py
 launch_debug.py
 main_debug.py
