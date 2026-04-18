@@ -32,31 +32,43 @@ async function waitForApi(maxRetries = 30) {
   return false;
 }
 
-function resolvePythonCmd() {
-  if (process.platform === 'win32') return 'python';
-  // Prefer python3.11 when available (matches Homebrew setup on this machine)
-  try {
-    require('child_process').execSync('which python3.11', { stdio: 'ignore' });
-    return 'python3.11';
-  } catch {
-    return 'python3';
+function resolvePythonBackend() {
+  if (process.platform === 'win32' && app.isPackaged) {
+    const bundled = path.join(process.resourcesPath, 'site-analysis-api', 'site-analysis-api.exe');
+    if (require('fs').existsSync(bundled)) {
+      return { cmd: bundled, args: [] };
+    }
   }
+
+  let pythonCmd;
+  if (process.platform === 'win32') {
+    pythonCmd = 'python';
+  } else {
+    try {
+      require('child_process').execSync('which python3.11', { stdio: 'ignore' });
+      pythonCmd = 'python3.11';
+    } catch {
+      pythonCmd = 'python3';
+    }
+  }
+
+  return {
+    cmd: pythonCmd,
+    args: ['-m', 'uvicorn', 'site_analysis.interfaces.api:app', '--port', String(API_PORT), '--host', '127.0.0.1']
+  };
 }
 
 function startPythonBackend() {
   const isDev = !app.isPackaged;
-  const pythonCmd = resolvePythonCmd();
+  const { cmd, args } = resolvePythonBackend();
 
-  const args = ['-m', 'uvicorn', 'site_analysis.interfaces.api:app', '--port', String(API_PORT), '--host', '127.0.0.1'];
-
-  // When running from source, we need to ensure src/ is on PYTHONPATH
   const env = { ...process.env };
   if (isDev) {
     const srcPath = path.resolve(__dirname, '..', 'src');
     env.PYTHONPATH = env.PYTHONPATH ? `${env.PYTHONPATH}${path.delimiter}${srcPath}` : srcPath;
   }
 
-  pythonProcess = spawn(pythonCmd, args, {
+  pythonProcess = spawn(cmd, args, {
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });

@@ -8,7 +8,59 @@
   },
   "scripts": {
     "start": "electron .",
+    "build:win": "electron-builder --win --x64",
+    "build:mac": "electron-builder --mac",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "build": {
+    "appId": "com.leozzl.site-analysis",
+    "productName": "小区-AOI空间匹配分析",
+    "copyright": "Copyright © 2026",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist-backend/site-analysis-api",
+        "to": "site-analysis-api",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/assets/icon.icns"
+    }
   },
   "repository": {
     "type": "git",
@@ -23,7 +75,8 @@
   },
   "homepage": "https://github.com/Leo-zzl/sites-aoi-analysis#readme",
   "devDependencies": {
-    "electron": "^41.2.1"
+    "electron": "^41.2.1",
+    "electron-builder": "^26.8.1"
   },
   "dependencies": {
     "form-data": "^4.0.5"
