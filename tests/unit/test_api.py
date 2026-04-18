@@ -79,7 +79,7 @@ class TestValidate:
         aoi_sid = aoi_res.json()["session_id"]
         site_sid = site_res.json()["session_id"]
 
-        res = client.post("/validate", data={
+        res = client.post("/validate", json={
             "aoi_session_id": aoi_sid,
             "site_session_id": site_sid,
             "scene_col": "场景",
@@ -104,7 +104,7 @@ class TestValidate:
         aoi_sid = aoi_res.json()["session_id"]
         site_sid = site_res.json()["session_id"]
 
-        res = client.post("/validate", data={
+        res = client.post("/validate", json={
             "aoi_session_id": aoi_sid,
             "site_session_id": site_sid,
             "scene_col": "场景",
@@ -132,7 +132,7 @@ class TestAnalyze:
         aoi_sid = aoi_res.json()["session_id"]
         site_sid = site_res.json()["session_id"]
 
-        res = client.post("/analyze", data={
+        res = client.post("/analyze", json={
             "aoi_session_id": aoi_sid,
             "site_session_id": site_sid,
             "scene_col": "场景",

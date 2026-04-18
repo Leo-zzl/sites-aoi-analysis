@@ -21,6 +21,25 @@ from site_analysis.infrastructure.repositories.excel_result_exporter import Exce
 from site_analysis.infrastructure.repositories.repository_factory import RepositoryFactory
 from site_analysis.interfaces.gui.view_model import MainViewModel
 
+
+def _clean_preview_rows(rows: List[Dict]) -> List[Dict]:
+    """Convert preview rows into JSON-safe values (NaN→None, Timestamp→str)."""
+    import math
+
+    cleaned = []
+    for row in rows:
+        clean = {}
+        for k, v in row.items():
+            if isinstance(v, float) and math.isnan(v):
+                clean[k] = None
+            elif hasattr(v, "isoformat"):
+                # pandas Timestamp / datetime / NaT
+                clean[k] = v.isoformat() if v is not None and not (isinstance(v, float) and math.isnan(v)) else None
+            else:
+                clean[k] = v
+        cleaned.append(clean)
+    return cleaned
+
 app = FastAPI(title="Site Analysis API")
 
 # Allow Electron frontend to call the API
@@ -85,37 +104,44 @@ def upload_file(file_type: str = Form(...), file: UploadFile = File(...)):
     }
 
 
+from pydantic import BaseModel
+
+
+class ValidateRequest(BaseModel):
+    aoi_session_id: Optional[str] = None
+    site_session_id: Optional[str] = None
+    scene_col: Optional[str] = None
+    boundary_col: Optional[str] = None
+    name_col: Optional[str] = None
+    lon_col: Optional[str] = None
+    lat_col: Optional[str] = None
+    freq_col: Optional[str] = None
+    coverage_type_col: Optional[str] = None
+
+
 @app.post("/validate")
-def validate(
-    aoi_session_id: Optional[str] = Form(None),
-    site_session_id: Optional[str] = Form(None),
-    scene_col: Optional[str] = Form(None),
-    boundary_col: Optional[str] = Form(None),
-    name_col: Optional[str] = Form(None),
-    lon_col: Optional[str] = Form(None),
-    lat_col: Optional[str] = Form(None),
-    freq_col: Optional[str] = Form(None),
-    coverage_type_col: Optional[str] = Form(None),
-):
+def validate(req: ValidateRequest):
     """Validate column mappings against uploaded files."""
     results = []
     preview_rows: List[dict] = []
     importer = ImportService()
 
-    if aoi_session_id and aoi_session_id in _upload_sessions:
-        path = Path(_upload_sessions[aoi_session_id]["path"])
-        aoi_mapping = ColumnMapping(scene_col=scene_col or "", boundary_col=boundary_col or "")
+    if req.aoi_session_id and req.aoi_session_id in _upload_sessions:
+        path = Path(_upload_sessions[req.aoi_session_id]["path"])
+        aoi_mapping = ColumnMapping(
+            scene_col=req.scene_col or "", boundary_col=req.boundary_col or ""
+        )
         result = importer.validate_mapping(path, aoi_mapping, "aoi")
         results.append(result)
 
-    if site_session_id and site_session_id in _upload_sessions:
-        path = Path(_upload_sessions[site_session_id]["path"])
+    if req.site_session_id and req.site_session_id in _upload_sessions:
+        path = Path(_upload_sessions[req.site_session_id]["path"])
         site_mapping = ColumnMapping(
-            name_col=name_col or "",
-            lon_col=lon_col or "",
-            lat_col=lat_col or "",
-            freq_col=freq_col or "",
-            coverage_type_col=coverage_type_col or "",
+            name_col=req.name_col or "",
+            lon_col=req.lon_col or "",
+            lat_col=req.lat_col or "",
+            freq_col=req.freq_col or "",
+            coverage_type_col=req.coverage_type_col or "",
         )
         result = importer.validate_mapping(path, site_mapping, "site")
         results.append(result)
@@ -124,7 +150,7 @@ def validate(
     return {
         "valid": combined.is_valid,
         "errors": combined.errors,
-        "preview_rows": combined.preview_rows,
+        "preview_rows": _clean_preview_rows(combined.preview_rows),
     }
 
 
@@ -177,33 +203,39 @@ def _run_analysis_job(
         queue.put_nowait({"error": str(exc), "traceback": traceback.format_exc()})
 
 
+class AnalyzeRequest(BaseModel):
+    aoi_session_id: str
+    site_session_id: str
+    scene_col: Optional[str] = None
+    boundary_col: Optional[str] = None
+    name_col: Optional[str] = None
+    lon_col: Optional[str] = None
+    lat_col: Optional[str] = None
+    freq_col: Optional[str] = None
+    coverage_type_col: Optional[str] = None
+
+
 @app.post("/analyze")
 async def analyze(
     background_tasks: BackgroundTasks,
-    aoi_session_id: str = Form(...),
-    site_session_id: str = Form(...),
-    scene_col: Optional[str] = Form(None),
-    boundary_col: Optional[str] = Form(None),
-    name_col: Optional[str] = Form(None),
-    lon_col: Optional[str] = Form(None),
-    lat_col: Optional[str] = Form(None),
-    freq_col: Optional[str] = Form(None),
-    coverage_type_col: Optional[str] = Form(None),
+    req: AnalyzeRequest,
 ):
     """Start an analysis job and return a job ID for progress tracking."""
-    if aoi_session_id not in _upload_sessions or site_session_id not in _upload_sessions:
+    if req.aoi_session_id not in _upload_sessions or req.site_session_id not in _upload_sessions:
         return {"error": "Invalid session IDs"}
 
     job_id = uuid.uuid4().hex
     output_path = TEMP_DIR / f"result_{job_id}.xlsx"
 
-    aoi_mapping = ColumnMapping(scene_col=scene_col or "", boundary_col=boundary_col or "")
+    aoi_mapping = ColumnMapping(
+        scene_col=req.scene_col or "", boundary_col=req.boundary_col or ""
+    )
     site_mapping = ColumnMapping(
-        name_col=name_col or "",
-        lon_col=lon_col or "",
-        lat_col=lat_col or "",
-        freq_col=freq_col or "",
-        coverage_type_col=coverage_type_col or "",
+        name_col=req.name_col or "",
+        lon_col=req.lon_col or "",
+        lat_col=req.lat_col or "",
+        freq_col=req.freq_col or "",
+        coverage_type_col=req.coverage_type_col or "",
     )
 
     loop = asyncio.get_event_loop()
@@ -221,8 +253,8 @@ async def analyze(
             None,
             _run_analysis_job,
             job_id,
-            Path(_upload_sessions[aoi_session_id]["path"]),
-            Path(_upload_sessions[site_session_id]["path"]),
+            Path(_upload_sessions[req.aoi_session_id]["path"]),
+            Path(_upload_sessions[req.site_session_id]["path"]),
             aoi_mapping,
             site_mapping,
             output_path,

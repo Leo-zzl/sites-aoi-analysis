@@ -227,8 +227,7 @@ ipcMain.handle('dialog:saveFile', async (_event, defaultName) => {
 
 function apiPost(apiPath, params) {
   const http = require('http');
-  const querystring = require('querystring');
-  const postData = querystring.stringify(params);
+  const postData = JSON.stringify(params);
 
   return new Promise((resolve, reject) => {
     const req = http.request(
@@ -238,7 +237,7 @@ function apiPost(apiPath, params) {
         path: apiPath,
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
         },
       },
