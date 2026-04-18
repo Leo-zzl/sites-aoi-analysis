@@ -3,9 +3,6 @@
   "version": "1.0.0",
   "description": "本工具用于无线通信网络规划中的**站点-AOI空间关联分析**，包含两大核心功能：",
   "main": "electron/main.js",
-  "directories": {
-    "test": "tests"
-  },
   "scripts": {
     "start": "electron .",
     "build:win": "electron-builder --win --x64",
