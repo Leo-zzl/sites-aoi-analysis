@@ -2,17 +2,20 @@
 
 import asyncio
 import json
+import math
 import shutil
 import tempfile
+import threading
 import time
 import traceback
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
+from pydantic import BaseModel
 
 from site_analysis.application.analysis_service import SiteAnalysisService
 from site_analysis.application.import_service import ImportService
@@ -24,21 +27,23 @@ from site_analysis.interfaces.gui.view_model import MainViewModel
 
 def _clean_preview_rows(rows: List[Dict]) -> List[Dict]:
     """Convert preview rows into JSON-safe values (NaN→None, Timestamp→str)."""
-    import math
-
     cleaned = []
     for row in rows:
-        clean = {}
+        clean: Dict[str, Any] = {}
         for k, v in row.items():
             if isinstance(v, float) and math.isnan(v):
                 clean[k] = None
             elif hasattr(v, "isoformat"):
-                # pandas Timestamp / datetime / NaT
-                clean[k] = v.isoformat() if v is not None and not (isinstance(v, float) and math.isnan(v)) else None
+                clean[k] = (
+                    v.isoformat()
+                    if v is not None and not (isinstance(v, float) and math.isnan(v))
+                    else None
+                )
             else:
                 clean[k] = v
         cleaned.append(clean)
     return cleaned
+
 
 app = FastAPI(title="Site Analysis API")
 
@@ -104,9 +109,6 @@ def upload_file(file_type: str = Form(...), file: UploadFile = File(...)):
     }
 
 
-from pydantic import BaseModel
-
-
 class ValidateRequest(BaseModel):
     aoi_session_id: Optional[str] = None
     site_session_id: Optional[str] = None
@@ -123,7 +125,6 @@ class ValidateRequest(BaseModel):
 def validate(req: ValidateRequest):
     """Validate column mappings against uploaded files."""
     results = []
-    preview_rows: List[dict] = []
     importer = ImportService()
 
     if req.aoi_session_id and req.aoi_session_id in _upload_sessions:
@@ -154,6 +155,19 @@ def validate(req: ValidateRequest):
     }
 
 
+class AnalyzeRequest(BaseModel):
+    aoi_session_id: str
+    site_session_id: str
+    output_path: str
+    scene_col: Optional[str] = None
+    boundary_col: Optional[str] = None
+    name_col: Optional[str] = None
+    lon_col: Optional[str] = None
+    lat_col: Optional[str] = None
+    freq_col: Optional[str] = None
+    coverage_type_col: Optional[str] = None
+
+
 def _run_analysis_job(
     job_id: str,
     aoi_path: Path,
@@ -166,27 +180,64 @@ def _run_analysis_job(
     job = _analysis_jobs[job_id]
     queue: asyncio.Queue = job["queue"]
 
+    _last_stage = [5]
+    _last_msg = ["准备分析..."]
+    _last_detail = [""]
+    _stop_heartbeat = threading.Event()
+
     def push(stage: int, message: str, detail: str = ""):
+        _last_stage[0] = stage
+        _last_msg[0] = message
+        _last_detail[0] = detail
         queue.put_nowait({"stage": stage, "message": message, "detail": detail})
 
+    def heartbeat():
+        """Send a heartbeat every second so the UI knows we are alive."""
+        while not _stop_heartbeat.wait(timeout=1.0):
+            if _analysis_jobs[job_id].get("cancelled"):
+                break
+            queue.put_nowait(
+                {
+                    "stage": _last_stage[0],
+                    "message": _last_msg[0],
+                    "detail": _last_detail[0],
+                    "heartbeat": True,
+                }
+            )
+
+    def _check_cancelled():
+        if _analysis_jobs[job_id].get("cancelled"):
+            raise RuntimeError("用户取消")
+
+    # Start heartbeat in a daemon thread
+    hb_thread = threading.Thread(target=heartbeat, daemon=True)
+    hb_thread.start()
+
     try:
+        _check_cancelled()
         push(10, "加载 AOI 数据...", "")
         aoi_repo = RepositoryFactory.create_aoi_repo(aoi_path, aoi_mapping)
         aois = aoi_repo.load_all()
 
+        _check_cancelled()
         push(30, "加载站点数据...", f"AOI 数量: {len(aois)}")
         site_repo = RepositoryFactory.create_site_repo(site_path, site_mapping)
         sites = site_repo.load_all()
 
-        push(50, "执行 AOI 空间匹配与最近室外站分析...", f"站点数量: {len(sites)}")
+        _check_cancelled()
+        push(45, "执行 AOI 空间匹配与最近室外站分析...", f"站点数量: {len(sites)}")
         exporter = ExcelResultExporter()
-        service = SiteAnalysisService(aoi_repo, site_repo, exporter)
+        service = SiteAnalysisService(
+            aoi_repo, site_repo, exporter, progress_callback=push
+        )
         result = service.run()
 
-        push(80, "导出结果文件...", "")
+        _check_cancelled()
+        push(85, "导出结果文件...", f"输出到: {output_path.name}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         exporter.export_with_summary(result.sites, result.summary, output_path)
 
-        push(100, "分析完成", "")
+        push(100, "分析完成", f"结果已保存: {output_path}")
         job["status"] = "success"
         job["output_path"] = str(output_path)
         job["summary"] = {
@@ -198,21 +249,16 @@ def _run_analysis_job(
         }
         queue.put_nowait({"done": True})
     except Exception as exc:
-        job["status"] = "error"
-        job["error"] = str(exc)
-        queue.put_nowait({"error": str(exc), "traceback": traceback.format_exc()})
-
-
-class AnalyzeRequest(BaseModel):
-    aoi_session_id: str
-    site_session_id: str
-    scene_col: Optional[str] = None
-    boundary_col: Optional[str] = None
-    name_col: Optional[str] = None
-    lon_col: Optional[str] = None
-    lat_col: Optional[str] = None
-    freq_col: Optional[str] = None
-    coverage_type_col: Optional[str] = None
+        if str(exc) == "用户取消":
+            job["status"] = "cancelled"
+            job["error"] = "用户取消"
+            queue.put_nowait({"cancelled": True})
+        else:
+            job["status"] = "error"
+            job["error"] = str(exc)
+            queue.put_nowait({"error": str(exc), "traceback": traceback.format_exc()})
+    finally:
+        _stop_heartbeat.set()
 
 
 @app.post("/analyze")
@@ -221,11 +267,14 @@ async def analyze(
     req: AnalyzeRequest,
 ):
     """Start an analysis job and return a job ID for progress tracking."""
-    if req.aoi_session_id not in _upload_sessions or req.site_session_id not in _upload_sessions:
+    if (
+        req.aoi_session_id not in _upload_sessions
+        or req.site_session_id not in _upload_sessions
+    ):
         return {"error": "Invalid session IDs"}
 
     job_id = uuid.uuid4().hex
-    output_path = TEMP_DIR / f"result_{job_id}.xlsx"
+    output_path = Path(req.output_path)
 
     aoi_mapping = ColumnMapping(
         scene_col=req.scene_col or "", boundary_col=req.boundary_col or ""
@@ -246,6 +295,7 @@ async def analyze(
         "output_path": None,
         "summary": None,
         "error": None,
+        "cancelled": False,
     }
 
     background_tasks.add_task(
@@ -262,6 +312,15 @@ async def analyze(
     )
 
     return {"job_id": job_id}
+
+
+@app.post("/cancel/{job_id}")
+def cancel_job(job_id: str):
+    """Signal a running analysis job to stop at the next checkpoint."""
+    if job_id not in _analysis_jobs:
+        return {"error": "Job not found"}
+    _analysis_jobs[job_id]["cancelled"] = True
+    return {"cancelled": True}
 
 
 @app.get("/progress/{job_id}")
@@ -281,7 +340,7 @@ async def progress(job_id: str):
                 yield f"event: ping\ndata: {time.time()}\n\n"
                 continue
 
-            if data.get("done") or data.get("error"):
+            if data.get("done") or data.get("error") or data.get("cancelled"):
                 yield f"event: complete\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
                 break
             else:
@@ -294,23 +353,6 @@ async def progress(job_id: str):
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
         },
-    )
-
-
-@app.get("/download/{job_id}")
-def download(job_id: str):
-    """Download the analysis result Excel file."""
-    if job_id not in _analysis_jobs:
-        return PlainTextResponse("Job not found", status_code=404)
-
-    output_path = _analysis_jobs[job_id].get("output_path")
-    if not output_path or not Path(output_path).exists():
-        return PlainTextResponse("Result file not found", status_code=404)
-
-    return FileResponse(
-        output_path,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename="小区_AOI匹配_结果.xlsx",
     )
 
 

@@ -32,6 +32,7 @@ const els = {
   browseBtn: document.getElementById('browse-btn'),
 
   analyzeBtn: document.getElementById('analyze-btn'),
+  stopBtn: document.getElementById('stop-btn'),
   progressFill: document.getElementById('progress-fill'),
   progressText: document.getElementById('progress-text'),
 };
@@ -157,9 +158,14 @@ els.outputPath.value = defaultOutputName();
 
 els.analyzeBtn.addEventListener('click', async () => {
   if (!state.valid) return;
-  if (!els.outputPath.value) {
-    showError('提示', '请先设置输出文件路径');
-    return;
+
+  // Ensure output path is set before starting
+  let outPath = els.outputPath.value.trim();
+  if (!outPath) {
+    const chosen = await window.electronAPI.saveFile(defaultOutputName());
+    if (!chosen) return;
+    outPath = chosen;
+    els.outputPath.value = outPath;
   }
 
   setAnalyzing(true);
@@ -168,6 +174,7 @@ els.analyzeBtn.addEventListener('click', async () => {
   const params = {
     aoi_session_id: state.aoiSessionId,
     site_session_id: state.siteSessionId,
+    output_path: outPath,
     scene_col: els.aoiScene.value,
     boundary_col: els.aoiBoundary.value,
     name_col: els.siteNameCol.value,
@@ -189,6 +196,16 @@ els.analyzeBtn.addEventListener('click', async () => {
   connectProgress(res.job_id);
 });
 
+els.stopBtn.addEventListener('click', async () => {
+  if (!state.jobId) return;
+  setProgress(els.progressFill.style.width.replace('%', ''), '正在取消...');
+  try {
+    await fetch(`${API_BASE}/cancel/${state.jobId}`, { method: 'POST' });
+  } catch (e) {
+    console.error('Cancel failed', e);
+  }
+});
+
 function setProgress(percent, text) {
   els.progressFill.style.width = `${percent}%`;
   els.progressText.textContent = text || '';
@@ -197,9 +214,11 @@ function setProgress(percent, text) {
 function setAnalyzing(active) {
   els.analyzeBtn.disabled = active;
   els.analyzeBtn.textContent = active ? '分析中...' : '开始分析';
+  els.stopBtn.style.display = active ? 'inline-flex' : 'none';
   els.validateBtn.disabled = active;
   els.aoiBtn.disabled = active;
   els.siteBtn.disabled = active;
+  els.browseBtn.disabled = active;
   [els.aoiScene, els.aoiBoundary, els.siteNameCol, els.siteLon, els.siteLat, els.siteFreq, els.siteCover].forEach((el) => {
     el.disabled = active;
   });
@@ -217,6 +236,13 @@ function connectProgress(jobId) {
     es.close();
     const data = JSON.parse(e.data);
     setAnalyzing(false);
+
+    if (data.cancelled) {
+      setProgress(0, '已取消');
+      els.validateMsg.textContent = '分析已取消';
+      els.validateMsg.className = 'validate-msg error';
+      return;
+    }
 
     if (data.error) {
       setProgress(0, '');
@@ -237,9 +263,10 @@ function connectProgress(jobId) {
       els.validateMsg.className = 'validate-msg success';
     }
 
-    const dl = await window.electronAPI.download(jobId);
-    if (!dl.canceled) {
-      setProgress(100, `结果已保存至：${dl.filePath}`);
+    // Result is already saved to the user-selected path; no download needed
+    const outPath = els.outputPath.value;
+    if (outPath) {
+      setProgress(100, `结果已保存至：${outPath}`);
     }
   });
 
@@ -250,6 +277,5 @@ function connectProgress(jobId) {
 }
 
 function showError(title, message) {
-  // Simple alert for now; Electron could expose a nicer dialog if needed
   alert(`${title}\n${message}`);
 }

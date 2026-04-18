@@ -123,7 +123,7 @@ class TestValidate:
 
 class TestAnalyze:
     @pytest.mark.slow
-    def test_analyze_and_progress(self, client, sample_aoi, sample_site):
+    def test_analyze_and_progress(self, client, sample_aoi, sample_site, tmp_path: Path):
         with sample_aoi.open("rb") as f:
             aoi_res = client.post("/upload", data={"file_type": "aoi"}, files={"file": ("aoi.xlsx", f)})
         with sample_site.open("rb") as f:
@@ -132,9 +132,11 @@ class TestAnalyze:
         aoi_sid = aoi_res.json()["session_id"]
         site_sid = site_res.json()["session_id"]
 
+        out_path = str(tmp_path / "result.xlsx")
         res = client.post("/analyze", json={
             "aoi_session_id": aoi_sid,
             "site_session_id": site_sid,
+            "output_path": out_path,
             "scene_col": "场景",
             "boundary_col": "边界WKT",
             "name_col": "小区名称",
@@ -164,7 +166,51 @@ class TestAnalyze:
 
         assert status["status"] == "success"
         assert status["summary"]["total_sites"] == 2
+        assert Path(out_path).exists()
 
-        dl = client.get(f"/download/{job_id}")
-        assert dl.status_code == 200
-        assert dl.headers["content-type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    @pytest.mark.slow
+    def test_cancel_job(self, client, sample_aoi, sample_site, tmp_path: Path):
+        with sample_aoi.open("rb") as f:
+            aoi_res = client.post("/upload", data={"file_type": "aoi"}, files={"file": ("aoi.xlsx", f)})
+        with sample_site.open("rb") as f:
+            site_res = client.post("/upload", data={"file_type": "site"}, files={"file": ("site.xlsx", f)})
+
+        aoi_sid = aoi_res.json()["session_id"]
+        site_sid = site_res.json()["session_id"]
+
+        out_path = str(tmp_path / "cancelled.xlsx")
+        res = client.post("/analyze", json={
+            "aoi_session_id": aoi_sid,
+            "site_session_id": site_sid,
+            "output_path": out_path,
+            "scene_col": "场景",
+            "boundary_col": "边界WKT",
+            "name_col": "小区名称",
+            "lon_col": "经度",
+            "lat_col": "纬度",
+            "freq_col": "使用频段",
+            "coverage_type_col": "覆盖类型",
+        })
+        assert res.status_code == 200
+        job_id = res.json()["job_id"]
+
+        # Immediately cancel
+        cancel_res = client.post(f"/cancel/{job_id}")
+        assert cancel_res.status_code == 200
+        assert cancel_res.json()["cancelled"] is True
+
+        # Poll SSE until completion
+        with client.stream("GET", f"/progress/{job_id}") as stream:
+            for line in stream.iter_lines():
+                if "complete" in line:
+                    break
+
+        # Job should end in some terminal state (cancelled if caught early,
+        # success/error if it finished before the check point)
+        for _ in range(20):
+            status = client.get(f"/jobs/{job_id}").json()
+            if status["status"] in ("cancelled", "success", "error"):
+                break
+            time.sleep(0.2)
+
+        assert status["status"] in ("cancelled", "success", "error")

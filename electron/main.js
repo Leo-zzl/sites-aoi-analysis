@@ -180,32 +180,6 @@ ipcMain.handle('api:jobStatus', async (_event, jobId) => {
   return apiGet(`/jobs/${jobId}`);
 });
 
-ipcMain.handle('api:download', async (_event, jobId) => {
-  const { session, dialog } = require('electron');
-  const http = require('http');
-  const fs = require('fs');
-  const path = require('path');
-
-  const { filePath } = await dialog.showSaveDialog(mainWindow, {
-    defaultPath: `小区_AOI匹配_结果_${new Date().toISOString().slice(0, 10)}.xlsx`,
-    filters: [{ name: 'Excel 文件', extensions: ['xlsx'] }],
-  });
-
-  if (!filePath) return { canceled: true };
-
-  return new Promise((resolve, reject) => {
-    const req = http.get(`http://127.0.0.1:${API_PORT}/download/${jobId}`, (res) => {
-      const file = fs.createWriteStream(filePath);
-      res.pipe(file);
-      file.on('finish', () => {
-        file.close();
-        resolve({ canceled: false, filePath });
-      });
-    });
-    req.on('error', reject);
-  });
-});
-
 ipcMain.handle('dialog:openFile', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],
