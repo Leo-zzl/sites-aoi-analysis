@@ -391,13 +391,8 @@ function connectProgress(jobId) {
     setAnalyzing(false);
 
     if (data.cancelled) {
-      // Mark current step as error
-      const idx = progressState.steps.findIndex((s) => s.status === 'doing');
-      if (idx >= 0) {
-        progressState.steps[idx].status = 'error';
-        updateLogEntry(idx, progressState.steps[idx]);
-      }
-      els.validateMsg.textContent = '分析已取消';
+      resetProgress();
+      els.validateMsg.textContent = '取消成功';
       els.validateMsg.className = 'validate-msg error';
       return;
     }
@@ -443,3 +438,6 @@ function connectProgress(jobId) {
 function showError(title, message) {
   alert(`${title}\n${message}`);
 }
+
+// Initial state: hide progress indicators until analysis starts
+resetProgress();
