@@ -441,3 +441,118 @@ Day 7
 | **P2** | `tests/unit/application/test_analysis_service.py`、`tests/unit/domain/test_analysis_summary.py`、`tests/integration/interfaces/test_progress_sse.py` | `application/analysis_service.py`、`interfaces/api.py`（_run_analysis_job） | — |
 | **P3** | `electron/renderer/__tests__/progress.test.js`、`electron/renderer/__tests__/utils.test.js` | `electron/renderer/index.html`、`style.css`、`app.js` | — |
 | **P4** | `electron/renderer/__tests__/`（Vitest 配置）、`e2e/`（可选）、`tests/integration/interfaces/test_cleanup.py`、`tests/integration/interfaces/test_upload_limit.py` | `interfaces/api.py`（finally/cleanup/TTL/限制）、`electron/main.js`、`package.json` | — |
+
+
+---
+
+# 后续工作计划（Phase 5+）
+
+> 以下问题在 P1~P4 完成后发现，作为持续改进项列入计划，按优先级逐步消除。
+
+---
+
+## Phase 5 — 领域层外部依赖解耦
+
+**目标**：将 `shapely` 从 `domain/models.py` 中移除，使领域层真正成为零外部依赖的纯业务规则层。  
+**背景**：当前 `domain/models.py` 直接 `from shapely.geometry import Point, Polygon`，严格 DDD 中领域层不应依赖基础设施库。
+
+### 5.1 抽取几何适配器
+- **文件**：新增 `src/site_analysis/infrastructure/geo/geometry_adapter.py`
+- **动作**：
+  1. 定义 `GeometryAdapter` 接口（或直接使用 Python `Protocol`）
+  2. 提供 `ShapelyAdapter` 实现，封装 `wkt_loads`、`Point`、`Polygon` 等操作
+  3. `domain/models.py` 中的 `Site` / `AOI` 不再持有 `shapely` 对象，改为持有 WKT 字符串或简单坐标元组
+- **TDD 要求**：先写 `test_geometry_adapter.py`，验证 WKT ↔ shapely 对象双向转换正确
+
+### 5.2 重构 domain models
+- **文件**：`src/site_analysis/domain/models.py`
+- **动作**：
+  1. `Site` 的 `geometry` 字段从 `shapely.geometry.Point` 改为 `(lon, lat)` 元组或 WKT 字符串
+  2. `AOI` 的 `geometry` 字段从 `shapely.geometry.Polygon` 改为 WKT 字符串
+  3. 所有依赖 `site.geometry` 的地方改为通过 `GeometryAdapter` 转换后再做空间计算
+- **影响面**：`analysis_service.py`、所有 Repository、测试用例
+
+### 5.3 更新仓储实现
+- **文件**：`infrastructure/repositories/excel_aoi_repo.py`、`csv_aoi_repo.py` 等
+- **动作**：加载 WKT 后不再直接传给 `AOI(..., geometry=wkt_loads(...))`，而是传 WKT 字符串，由应用层或基础设施层在需要时转换
+
+### 5.4 验收标准
+| 检查项 | 通过标准 |
+|--------|----------|
+| 零外部依赖 | `domain/` 目录下无任何 `import shapely`、`import geopandas`、`import scipy` |
+| 功能无损 | 全部 66 个 pytest 通过，分析结果与重组前完全一致 |
+| 性能无退化 | `test_performance.py` 耗时与基线差异 < 5% |
+
+---
+
+## Phase 6 — 工程化加固续篇
+
+**目标**：消除打包阻塞、测试不稳定、跨平台编码等工程债务。
+
+### 6.1 补齐 Electron 打包图标
+- **文件**：`electron/assets/`
+- **动作**：
+  1. 放置 `icon.ico`（Windows，256×256 或至少 128×128）
+  2. 放置 `icon.icns`（macOS，包含多分辨率）
+  3. 删除临时 `README.md` 或改为 `.gitkeep`
+- **验收**：`npm run build:mac` / `build:win` 不再报 icon 缺失警告
+
+### 6.2 稳定 Electron 启动测试
+- **文件**：`tests/integration/legacy/test_electron_launch.py`
+- **动作**：
+  1. 方案 A：给测试打 `@pytest.mark.xfail(reason="环境时序不稳定，待替换为 Playwright")`
+  2. 方案 B：删除该测试，由 `e2e/basic.spec.js`（Playwright）完全接管 Electron UI 验证
+- **建议**：选方案 B，避免维护两套 Electron 测试
+
+### 6.3 中文文件名跨平台安全
+- **文件**：根目录下的 `AOI样例数据.xlsx`、`基站站点样例数据.xlsx`
+- **动作**：
+  1. 在 `.github/workflows/release.yml` 中增加 `env: LANG: en_US.UTF-8` 和 `PYTHONIOENCODING: utf-8`
+  2. 在 `pyproject.toml` 或 `readme.md` 中注明：项目要求 UTF-8 环境
+  3. （可选）将样例文件重命名为英文（如 `sample_aoi.xlsx`、`sample_sites.xlsx`），但需同步更新所有文档和测试引用
+- **验收**：GitHub Actions 在 Windows + Ubuntu + macOS 三平台均能正常检出和读取样例文件
+
+### 6.4 清理历史 `__pycache__` 残留
+- **命令**：
+  ```bash
+  git rm -r --cached src/**/__pycache__
+  git rm -r --cached tests/**/__pycache__
+  ```
+- **动作**：确认 `.gitignore` 已包含 `__pycache__/`（当前已有），然后清理历史跟踪残留
+
+### 6.5 引入类型检查（可选，P2）
+- **工具**：`mypy` 或 `pyright`
+- **动作**：在 `pyproject.toml` 增加 `[tool.mypy]` 配置，先对 `domain/` 和 `application/` 启用类型检查
+- **收益**：提前发现接口契约错误，尤其 Repository 抽象迁移后，类型提示能防止实现类漏写方法
+
+---
+
+## 三、优先级与执行建议
+
+```
+立即（本周）
+  └─ 6.1 补齐 Electron 图标（阻塞打包）
+  └─ 6.2 处理不稳定 Electron 测试（减少 CI 噪音）
+
+短期（2 周内）
+  └─ 6.4 清理 __pycache__ 残留（一次性操作）
+  └─ 6.3 中文文件名 CI 安全（GitHub Actions 配置）
+
+中期（1 个月内）
+  └─ Phase 5 领域层解耦（工作量最大，需充分测试）
+
+长期（按需）
+  └─ 6.5 类型检查（团队熟悉后可逐步推进）
+```
+
+---
+
+## 四、验收总表（新增项）
+
+| 检查项 | 通过标准 |
+|--------|----------|
+| Electron 打包 | `npm run build:mac` 成功生成 `.dmg`，无 icon 缺失警告 |
+| CI 稳定 | GitHub Actions 三平台全部 green，无 Electron 启动测试超时 |
+| 编码安全 | Windows CI 能正确检出并读取含中文文件名的样例数据 |
+| 领域纯净 | `grep -r "import shapely" src/site_analysis/domain/` 返回空 |
+| 缓存干净 | `git ls-files | grep __pycache__` 返回空 |
