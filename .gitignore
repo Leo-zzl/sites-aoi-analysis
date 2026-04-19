@@ -19,3 +19,4 @@ diagnose_gui.py
 dist/
 dist-backend/
 node_modules/
+test-results/
