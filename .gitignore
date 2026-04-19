@@ -14,9 +14,4 @@ check_gui.py
 launch_debug.py
 main_debug.py
 diagnose_gui.py
-.benchmarks/
-.pytest_cache/
-dist/
-dist-backend/
-*.pen
 node_modules/
