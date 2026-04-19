@@ -180,8 +180,8 @@ els.analyzeBtn.addEventListener('click', async () => {
     els.outputPath.value = outPath;
   }
 
-  setAnalyzing(true);
   resetProgress();
+  setAnalyzing(true);
   updateProgress({ stage: 5, message: '准备分析...', detail: '' });
 
   const params = {
