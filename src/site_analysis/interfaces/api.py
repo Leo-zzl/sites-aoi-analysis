@@ -68,9 +68,19 @@ def health():
     return {"status": "ok"}
 
 
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+
+
 @app.post("/upload")
 def upload_file(file_type: str = Form(...), file: UploadFile = File(...)):
     """Upload an AOI or Site file; return columns and auto-detected mapping."""
+    # Check file size
+    file.file.seek(0, 2)
+    size = file.file.tell()
+    file.file.seek(0)
+    if size > MAX_UPLOAD_SIZE:
+        return {"error": f"文件超过 50MB 限制（当前 {size // (1024 * 1024)}MB）"}
+
     suffix = Path(file.filename or "data.xlsx").suffix
     session_id = f"{file_type}_{uuid.uuid4().hex}"
     dest = TEMP_DIR / f"{session_id}{suffix}"
@@ -165,8 +175,24 @@ class AnalyzeRequest(BaseModel):
     coverage_type_col: Optional[str] = None
 
 
+JOB_TTL_SECONDS = 1800.0
+
+
+def _schedule_job_cleanup(job_id: str, delay: float = None):
+    """Schedule removal of a completed job from memory after TTL."""
+    if delay is None:
+        delay = JOB_TTL_SECONDS
+
+    def cleanup():
+        _analysis_jobs.pop(job_id, None)
+
+    threading.Timer(delay, cleanup).start()
+
+
 def _run_analysis_job(
     job_id: str,
+    aoi_session_id: str,
+    site_session_id: str,
     aoi_path: Path,
     site_path: Path,
     aoi_mapping: ColumnMapping,
@@ -256,6 +282,15 @@ def _run_analysis_job(
             queue.put_nowait({"error": str(exc), "traceback": traceback.format_exc()})
     finally:
         _stop_heartbeat.set()
+        # Clean up temp upload files
+        for sid in [aoi_session_id, site_session_id]:
+            info = _upload_sessions.pop(sid, None)
+            if info:
+                p = Path(info["path"])
+                if p.exists():
+                    p.unlink()
+        # Schedule job TTL cleanup
+        _schedule_job_cleanup(job_id)
 
 
 @app.post("/analyze")
@@ -300,6 +335,8 @@ async def analyze(
             None,
             _run_analysis_job,
             job_id,
+            req.aoi_session_id,
+            req.site_session_id,
             Path(_upload_sessions[req.aoi_session_id]["path"]),
             Path(_upload_sessions[req.site_session_id]["path"]),
             aoi_mapping,
@@ -318,6 +355,19 @@ def cancel_job(job_id: str):
         return {"error": "Job not found"}
     _analysis_jobs[job_id]["cancelled"] = True
     return {"cancelled": True}
+
+
+@app.post("/cleanup")
+def cleanup():
+    """Remove all temporary files in the API temp directory."""
+    if TEMP_DIR.exists():
+        for child in TEMP_DIR.iterdir():
+            if child.is_file():
+                child.unlink()
+            elif child.is_dir():
+                shutil.rmtree(child)
+    _upload_sessions.clear()
+    return {"cleaned": True}
 
 
 @app.get("/progress/{job_id}")

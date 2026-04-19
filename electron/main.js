@@ -140,8 +140,21 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-app.on('will-quit', () => {
+app.on('will-quit', async () => {
   stopPythonBackend();
+  // Notify backend to clean up temp files
+  try {
+    await new Promise((resolve) => {
+      const req = require('http').request(
+        { host: '127.0.0.1', port: API_PORT, path: '/cleanup', method: 'POST' },
+        () => resolve()
+      );
+      req.on('error', () => resolve());
+      req.end();
+    });
+  } catch {
+    // ignore cleanup errors on quit
+  }
 });
 
 // IPC handlers
