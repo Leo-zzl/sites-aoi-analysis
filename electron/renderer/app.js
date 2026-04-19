@@ -233,74 +233,118 @@ function resetProgress() {
 }
 
 function updateProgress(data) {
-  const { stage, message, detail } = data;
+  const { stage, message, detail, heartbeat } = data;
 
-  // Update bar
+  // Update bar (always, so width stays current)
   els.progressFill.style.width = `${stage}%`;
+
+  // Heartbeat: keep animation alive but do NOT touch the log
+  if (heartbeat) {
+    return;
+  }
 
   // Update current stage text
   if (message) {
     els.progressStage.textContent = message;
   }
-  if (detail) {
+  if (detail !== undefined) {
     els.progressDetail.textContent = detail;
   }
 
   // Find or create step
   const existingIndex = progressState.steps.findIndex((s) => s.message === message);
   if (existingIndex >= 0) {
-    // Update existing step detail
-    progressState.steps[existingIndex].stage = stage;
-    progressState.steps[existingIndex].detail = detail;
-    progressState.steps[existingIndex].status = 'doing';
+    // Same step, only detail may have changed
+    const step = progressState.steps[existingIndex];
+    const detailChanged = step.detail !== detail;
+    step.stage = stage;
+    step.detail = detail;
+    step.status = 'doing';
+    if (detailChanged) {
+      updateLogEntry(existingIndex, step);
+    }
   } else {
     // Mark previous doing as done
-    progressState.steps.forEach((s) => {
-      if (s.status === 'doing') s.status = 'done';
+    progressState.steps.forEach((s, idx) => {
+      if (s.status === 'doing') {
+        s.status = 'done';
+        updateLogEntry(idx, s);
+      }
     });
     // Add new step
-    progressState.steps.push({ stage, message, detail, status: 'doing' });
+    const newStep = { stage, message, detail, status: 'doing' };
+    progressState.steps.push(newStep);
+    appendLogEntry(newStep, progressState.steps.length - 1);
   }
-
-  renderProgressLog();
 }
 
-function renderProgressLog() {
-  els.progressLog.innerHTML = '';
-  progressState.steps.forEach((step, index) => {
-    const entry = document.createElement('div');
-    entry.className = `log-entry ${step.status}`;
+function appendLogEntry(step, index) {
+  const entry = createLogEntryElement(step, index);
+  els.progressLog.appendChild(entry);
+  els.progressLog.scrollTop = els.progressLog.scrollHeight;
+}
 
-    const icon = document.createElement('div');
+function updateLogEntry(index, step) {
+  const existing = els.progressLog.children[index];
+  if (!existing) {
+    appendLogEntry(step, index);
+    return;
+  }
+  // Update class
+  existing.className = `log-entry ${step.status}`;
+  // Update icon
+  const icon = existing.querySelector('.log-icon');
+  if (icon) {
     icon.className = `log-icon ${step.status}`;
     if (step.status === 'done') icon.textContent = '✓';
     else if (step.status === 'doing') icon.textContent = (index + 1).toString();
-    else if (step.status === 'pending') icon.textContent = (index + 1).toString();
     else if (step.status === 'error') icon.textContent = '!';
-
-    const body = document.createElement('div');
-    body.className = 'log-body';
-
-    const title = document.createElement('div');
-    title.className = 'log-title';
-    title.textContent = step.message;
-
-    body.appendChild(title);
-
-    if (step.detail) {
-      const detail = document.createElement('div');
-      detail.className = 'log-detail';
-      detail.textContent = step.detail;
-      body.appendChild(detail);
+  }
+  // Update detail
+  const detailEl = existing.querySelector('.log-detail');
+  if (detailEl) {
+    detailEl.textContent = step.detail || '';
+    detailEl.style.display = step.detail ? 'block' : 'none';
+  } else if (step.detail) {
+    const body = existing.querySelector('.log-body');
+    if (body) {
+      const d = document.createElement('div');
+      d.className = 'log-detail';
+      d.textContent = step.detail;
+      body.appendChild(d);
     }
+  }
+}
 
-    entry.appendChild(icon);
-    entry.appendChild(body);
-    els.progressLog.appendChild(entry);
-  });
+function createLogEntryElement(step, index) {
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${step.status}`;
 
-  // Auto-scroll to bottom
-  els.progressLog.scrollTop = els.progressLog.scrollHeight;
+  const icon = document.createElement('div');
+  icon.className = `log-icon ${step.status}`;
+  if (step.status === 'done') icon.textContent = '✓';
+  else if (step.status === 'doing') icon.textContent = (index + 1).toString();
+  else if (step.status === 'pending') icon.textContent = (index + 1).toString();
+  else if (step.status === 'error') icon.textContent = '!';
+
+  const body = document.createElement('div');
+  body.className = 'log-body';
+
+  const title = document.createElement('div');
+  title.className = 'log-title';
+  title.textContent = step.message;
+  body.appendChild(title);
+
+  if (step.detail) {
+    const detail = document.createElement('div');
+    detail.className = 'log-detail';
+    detail.textContent = step.detail;
+    body.appendChild(detail);
+  }
+
+  entry.appendChild(icon);
+  entry.appendChild(body);
+  return entry;
 }
 
 function setAnalyzing(active) {
@@ -348,30 +392,34 @@ function connectProgress(jobId) {
 
     if (data.cancelled) {
       // Mark current step as error
-      const current = progressState.steps.find((s) => s.status === 'doing');
-      if (current) current.status = 'error';
-      renderProgressLog();
+      const idx = progressState.steps.findIndex((s) => s.status === 'doing');
+      if (idx >= 0) {
+        progressState.steps[idx].status = 'error';
+        updateLogEntry(idx, progressState.steps[idx]);
+      }
       els.validateMsg.textContent = '分析已取消';
       els.validateMsg.className = 'validate-msg error';
       return;
     }
 
     if (data.error) {
-      const current = progressState.steps.find((s) => s.status === 'doing');
-      if (current) {
-        current.status = 'error';
-        current.detail = data.error;
+      const idx = progressState.steps.findIndex((s) => s.status === 'doing');
+      if (idx >= 0) {
+        progressState.steps[idx].status = 'error';
+        progressState.steps[idx].detail = data.error;
+        updateLogEntry(idx, progressState.steps[idx]);
       }
-      renderProgressLog();
       showError('分析失败', data.error + '\n' + (data.traceback || ''));
       return;
     }
 
     // Mark all as done
-    progressState.steps.forEach((s) => {
-      if (s.status === 'doing') s.status = 'done';
+    progressState.steps.forEach((s, idx) => {
+      if (s.status === 'doing') {
+        s.status = 'done';
+        updateLogEntry(idx, s);
+      }
     });
-    renderProgressLog();
 
     const status = await window.electronAPI.jobStatus(jobId);
     if (status.summary) {
