@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from site_analysis.domain.value_objects import ColumnMapping, FileType
-from site_analysis.infrastructure.repositories import AoiRepository, SiteRepository
+from site_analysis.domain.repositories import AoiRepository, SiteRepository
 from site_analysis.infrastructure.repositories.csv_aoi_repo import CsvAoiRepository
 from site_analysis.infrastructure.repositories.csv_site_repo import CsvSiteRepository
 from site_analysis.infrastructure.repositories.excel_aoi_repo import ExcelAoiRepository

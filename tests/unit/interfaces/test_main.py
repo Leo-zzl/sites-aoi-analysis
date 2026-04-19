@@ -9,7 +9,7 @@ class TestMainEntry:
     def test_gui_flag_removed(self):
         """--gui should print a friendly message and exit with code 1."""
         result = subprocess.run(
-            [sys.executable, str(Path(__file__).parent.parent.parent / "main.py"), "--gui"],
+            [sys.executable, str(Path(__file__).parent.parent.parent.parent / "main.py"), "--gui"],
             capture_output=True,
             text=True,
         )
@@ -19,7 +19,7 @@ class TestMainEntry:
     def test_cli_runs_without_args(self):
         """Running without args should attempt to launch CLI (will fail without data, but not crash)."""
         result = subprocess.run(
-            [sys.executable, str(Path(__file__).parent.parent.parent / "main.py")],
+            [sys.executable, str(Path(__file__).parent.parent.parent.parent / "main.py")],
             capture_output=True,
             text=True,
         )

@@ -7,7 +7,7 @@ import pandas as pd
 
 from site_analysis.domain.models import Site
 from site_analysis.domain.value_objects import ColumnMapping, CoverageType
-from site_analysis.infrastructure.repositories import SiteRepository
+from site_analysis.domain.repositories import SiteRepository
 
 
 def _read_csv_with_fallback_encoding(file_path: Path) -> pd.DataFrame:

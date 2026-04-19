@@ -8,7 +8,7 @@ from shapely.wkt import loads as wkt_loads
 
 from site_analysis.domain.models import AOI
 from site_analysis.domain.value_objects import ColumnMapping
-from site_analysis.infrastructure.repositories import AoiRepository
+from site_analysis.domain.repositories import AoiRepository
 
 
 def _read_csv_with_fallback_encoding(file_path: Path) -> pd.DataFrame:

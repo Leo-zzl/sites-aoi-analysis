@@ -7,7 +7,7 @@ import pandas as pd
 
 from site_analysis.domain.models import Site
 from site_analysis.domain.value_objects import ColumnMapping, CoverageType
-from site_analysis.infrastructure.repositories import SiteRepository
+from site_analysis.domain.repositories import SiteRepository
 
 COL_SITE_NAME = "小区名称"
 COL_FREQ = "使用频段"

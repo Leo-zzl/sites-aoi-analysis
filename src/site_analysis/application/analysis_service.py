@@ -10,7 +10,7 @@ from site_analysis.domain.models import AOI, Site
 from site_analysis.domain.value_objects import AnalysisResult, AnalysisSummary, UtmZone
 from site_analysis.infrastructure.geo.projection import project_sites_to_utm
 from site_analysis.infrastructure.geo.spatial_index import SpatialIndex
-from site_analysis.infrastructure.repositories import AoiRepository, SiteRepository
+from site_analysis.domain.repositories import AoiRepository, SiteRepository
 from site_analysis.infrastructure.repositories.excel_result_exporter import ExcelResultExporter
 
 MAX_SEARCH_DISTANCE = 1000.0

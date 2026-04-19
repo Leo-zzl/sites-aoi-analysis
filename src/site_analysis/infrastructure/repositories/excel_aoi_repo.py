@@ -8,7 +8,7 @@ from shapely.wkt import loads as wkt_loads
 
 from site_analysis.domain.models import AOI
 from site_analysis.domain.value_objects import ColumnMapping
-from site_analysis.infrastructure.repositories import AoiRepository
+from site_analysis.domain.repositories import AoiRepository
 
 
 class ExcelAoiRepository(AoiRepository):
