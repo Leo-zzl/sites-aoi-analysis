@@ -33,11 +33,13 @@ async function waitForApi(maxRetries = 30) {
 }
 
 function resolvePythonBackend() {
-  if (process.platform === 'win32' && app.isPackaged) {
-    const bundled = path.join(process.resourcesPath, 'site-analysis-api', 'site-analysis-api.exe');
+  if (app.isPackaged) {
+    const exeName = process.platform === 'win32' ? 'site-analysis-api.exe' : 'site-analysis-api';
+    const bundled = path.join(process.resourcesPath, 'site-analysis-api', exeName);
     if (require('fs').existsSync(bundled)) {
       return { cmd: bundled, args: [] };
     }
+    throw new Error(`打包后端未找到: ${bundled}`);
   }
 
   let pythonCmd;
@@ -79,6 +81,14 @@ function startPythonBackend() {
 
   pythonProcess.stderr.on('data', (data) => {
     console.error(`[Python] ${data.toString().trim()}`);
+  });
+
+  pythonProcess.on('error', (err) => {
+    console.error(`[Python] 启动失败: ${err.message}`);
+    if (mainWindow) {
+      dialog.showErrorBox('启动失败', `Python 分析引擎启动失败: ${err.message}`);
+    }
+    app.quit();
   });
 
   pythonProcess.on('exit', (code) => {
