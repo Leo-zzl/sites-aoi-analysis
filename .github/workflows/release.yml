@@ -24,7 +24,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install pyinstaller
+          pip install pyinstaller pytest
 
       - name: Package Python backend with PyInstaller
         run: |
@@ -101,7 +101,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install pyinstaller
+          pip install pyinstaller pytest
 
       - name: Package Python backend with PyInstaller
         run: |
