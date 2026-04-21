@@ -20,3 +20,5 @@ dist/
 dist-backend/
 node_modules/
 test-results/
+build/
+*.spec
