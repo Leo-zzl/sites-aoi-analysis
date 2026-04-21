@@ -42,11 +42,11 @@ class ShapelyAdapter:
     def contains(self, aoi: AOI, site: Site) -> bool:
         polygon = self.polygon_from_aoi(aoi)
         point = self.point_from_site(site)
-        return polygon.contains(point)
+        return bool(polygon.contains(point))
 
     def validate_wkt(self, wkt_str: str) -> bool:
         try:
-            wkt_loads(wkt_str)
+            _ = wkt_loads(wkt_str)
             return True
         except Exception:
             return False

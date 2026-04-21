@@ -1,6 +1,6 @@
 """Application service that runs the full AOI matching + nearest outdoor analysis."""
 
-from typing import List
+from typing import List, Optional
 
 import geopandas as gpd
 import numpy as np
@@ -47,7 +47,7 @@ class SiteAnalysisService:
 
         self.progress_callback(40, "执行 AOI 空间匹配...", f"构建空间数据...（{len(sites)} 个站点 / {len(aois)} 个 AOI）")
         self._match_aois(aois, sites)
-        matched = sum(1 for s in sites if s.result and s.result.aoi_matched)
+        matched = sum(1 for s in sites if s.result.aoi_matched)
         self.progress_callback(55, "执行 AOI 空间匹配...", f"已完成，{matched}/{len(sites)} 个站点已匹配 AOI")
 
         self.progress_callback(60, "查找最近室外站...", "")
@@ -109,8 +109,8 @@ class SiteAnalysisService:
         self.progress_callback(62, "查找最近室外站...", f"筛选室内/室外站点... 室内 {len(indoor_sites)} 个，室外 {len(outdoor_sites)} 个")
 
         # Determine UTM zone from median centroid
-        median_lon = np.median([s.lon for s in sites])
-        median_lat = np.median([s.lat for s in sites])
+        median_lon = float(np.median([s.lon for s in sites]))
+        median_lat = float(np.median([s.lat for s in sites]))
         utm_zone = UtmZone.from_lon_lat(median_lon, median_lat)
 
         self.progress_callback(65, "查找最近室外站...", f"投影坐标到 {utm_zone.epsg}...")
@@ -147,7 +147,7 @@ class SiteAnalysisService:
 class AnalysisResultContainer:
     """Wrapper around the analysis output."""
 
-    def __init__(self, sites: List[Site], summary: AnalysisSummary = None):
+    def __init__(self, sites: List[Site], summary: "Optional[AnalysisSummary]" = None):
         self.sites = sites
         self.summary = summary or AnalysisSummary.from_sites(sites)
 
