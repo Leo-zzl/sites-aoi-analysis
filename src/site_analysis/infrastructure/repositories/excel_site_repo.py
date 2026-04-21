@@ -42,8 +42,8 @@ class ExcelSiteRepository(SiteRepository):
             lat_col = self.column_mapping.lat_col
             freq_col = self.column_mapping.freq_col
             coverage_type_col = self.column_mapping.coverage_type_col
-            needed_cols = [name_col, lon_col, lat_col, freq_col, coverage_type_col]
-            df = pd.read_excel(self.file_path, sheet_name=0, usecols=needed_cols)
+            needed_cols = [c for c in [name_col, lon_col, lat_col, freq_col, coverage_type_col] if c]
+            df = pd.read_excel(self.file_path, sheet_name=0, usecols=needed_cols or None)
 
             df[lon_col] = pd.to_numeric(df[lon_col], errors="coerce")
             df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")

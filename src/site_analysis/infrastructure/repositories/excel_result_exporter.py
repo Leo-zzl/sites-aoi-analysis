@@ -7,6 +7,7 @@ import pandas as pd
 
 from site_analysis.domain.models import Site
 from site_analysis.domain.value_objects import AnalysisResult, AnalysisSummary
+from site_analysis.application.aoi_coverage_analyzer import AoiCoverageAnalyzer
 
 
 class ExcelResultExporter:
@@ -80,6 +81,50 @@ class ExcelResultExporter:
         with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
             df_summary.to_excel(writer, sheet_name="Summary", index=False)
             df_results.to_excel(writer, sheet_name="Results", index=False)
+
+    def export_full_with_aoi_coverage(
+        self,
+        sites: List[Site],
+        summary: AnalysisSummary,
+        output_path: Path,
+        aois=None,
+        raw_site_file: Path = None,
+    ) -> None:
+        """Export full results including AOI coverage analysis sheets."""
+        if raw_site_file:
+            df_results = self._merge_with_raw(sites, raw_site_file)
+        else:
+            df_results = self.to_dataframe(sites)
+
+        df_summary = pd.DataFrame({
+            "指标": [
+                "总站点数",
+                "AOI已匹配",
+                "室内站总数",
+                "室外站总数",
+                "1000米内找到室外站",
+            ],
+            "数值": [
+                summary.total_sites,
+                summary.aoi_matched,
+                summary.indoor_sites,
+                summary.outdoor_sites,
+                summary.indoor_with_outdoor,
+            ],
+        })
+
+        with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+            df_summary.to_excel(writer, sheet_name="Summary", index=False)
+            df_results.to_excel(writer, sheet_name="Results", index=False)
+
+            if aois:
+                analyzer = AoiCoverageAnalyzer()
+                df_indoor = analyzer.analyze_indoor_coverage(aois, sites)
+                df_outdoor = analyzer.analyze_outdoor_coverage(aois, sites)
+                if not df_indoor.empty:
+                    df_indoor.to_excel(writer, sheet_name="AOI内室内覆盖情况", index=False)
+                if not df_outdoor.empty:
+                    df_outdoor.to_excel(writer, sheet_name="AOI的周边宏站覆盖情况", index=False)
 
     def export_merged_with_summary(
         self,

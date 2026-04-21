@@ -24,7 +24,8 @@ class ExcelAoiRepository(AoiRepository):
         if self.column_mapping is not None:
             scene_col = self.column_mapping.scene_col
             boundary_col = self.column_mapping.boundary_col
-            df = pd.read_excel(self.file_path, sheet_name=0, usecols=[scene_col, boundary_col])
+            usecols = [c for c in [scene_col, boundary_col] if c]
+            df = pd.read_excel(self.file_path, sheet_name=0, usecols=usecols or None)
             for _, row in df.iterrows():
                 wkt_str = str(row.get(boundary_col, "")).strip()
                 wkt_str = wkt_str.strip('"').strip("'").strip()

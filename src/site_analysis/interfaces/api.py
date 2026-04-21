@@ -258,8 +258,9 @@ def _run_analysis_job(
         _check_cancelled()
         push(85, "导出结果文件...", f"输出到: {output_path.name}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        exporter.export_merged_with_summary(
-            result.sites, result.summary, output_path, raw_site_file=site_path
+        exporter.export_full_with_aoi_coverage(
+            result.sites, result.summary, output_path,
+            aois=aois, raw_site_file=site_path
         )
 
         push(100, "分析完成", f"结果已保存: {output_path}")

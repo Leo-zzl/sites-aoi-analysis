@@ -34,9 +34,9 @@ class CsvSiteRepository(SiteRepository):
         lat_col = self.column_mapping.lat_col
         freq_col = self.column_mapping.freq_col
         coverage_type_col = self.column_mapping.coverage_type_col
-        needed_cols = [name_col, lon_col, lat_col, freq_col, coverage_type_col]
+        needed_cols = [c for c in [name_col, lon_col, lat_col, freq_col, coverage_type_col] if c]
 
-        df = _read_csv_with_fallback_encoding(self.file_path, usecols=needed_cols)
+        df = _read_csv_with_fallback_encoding(self.file_path, usecols=needed_cols or None)
         sites = []
 
         df[lon_col] = pd.to_numeric(df[lon_col], errors="coerce")

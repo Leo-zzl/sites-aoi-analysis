@@ -31,7 +31,8 @@ class CsvAoiRepository(AoiRepository):
 
         scene_col = self.column_mapping.scene_col
         boundary_col = self.column_mapping.boundary_col
-        df = _read_csv_with_fallback_encoding(self.file_path, usecols=[scene_col, boundary_col])
+        usecols = [c for c in [scene_col, boundary_col] if c]
+        df = _read_csv_with_fallback_encoding(self.file_path, usecols=usecols or None)
         aois = []
 
         adapter = ShapelyAdapter()
