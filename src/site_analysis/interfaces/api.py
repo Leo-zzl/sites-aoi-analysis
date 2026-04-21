@@ -68,7 +68,7 @@ def health():
     return {"status": "ok"}
 
 
-MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+MAX_UPLOAD_SIZE = 500 * 1024 * 1024  # 500 MB
 
 
 @app.post("/upload")
@@ -79,7 +79,7 @@ def upload_file(file_type: str = Form(...), file: UploadFile = File(...)):
     size = file.file.tell()
     file.file.seek(0)
     if size > MAX_UPLOAD_SIZE:
-        return {"error": f"文件超过 50MB 限制（当前 {size // (1024 * 1024)}MB）"}
+        return {"error": f"文件超过 500MB 限制（当前 {size // (1024 * 1024)}MB）"}
 
     suffix = Path(file.filename or "data.xlsx").suffix
     session_id = f"{file_type}_{uuid.uuid4().hex}"
@@ -258,7 +258,9 @@ def _run_analysis_job(
         _check_cancelled()
         push(85, "导出结果文件...", f"输出到: {output_path.name}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        exporter.export_with_summary(result.sites, result.summary, output_path)
+        exporter.export_merged_with_summary(
+            result.sites, result.summary, output_path, raw_site_file=site_path
+        )
 
         push(100, "分析完成", f"结果已保存: {output_path}")
         job["status"] = "success"

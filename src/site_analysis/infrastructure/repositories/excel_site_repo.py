@@ -36,28 +36,22 @@ class ExcelSiteRepository(SiteRepository):
         self.column_mapping = column_mapping
 
     def load_all(self) -> List[Site]:
-        df = pd.read_excel(self.file_path, sheet_name=0)
-
         if self.column_mapping is not None:
             name_col = self.column_mapping.name_col
             lon_col = self.column_mapping.lon_col
             lat_col = self.column_mapping.lat_col
             freq_col = self.column_mapping.freq_col
             coverage_type_col = self.column_mapping.coverage_type_col
+            needed_cols = [name_col, lon_col, lat_col, freq_col, coverage_type_col]
+            df = pd.read_excel(self.file_path, sheet_name=0, usecols=needed_cols)
 
             df[lon_col] = pd.to_numeric(df[lon_col], errors="coerce")
             df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")
             valid_mask = df[lon_col].notna() & df[lat_col].notna()
-            df = df[valid_mask].reset_index(drop=True)
+            df = df[valid_mask]
 
-            core_cols = {name_col, lon_col, lat_col, freq_col, coverage_type_col}
             sites = []
-            for _, row in df.iterrows():
-                extra = {
-                    col: row[col]
-                    for col in df.columns
-                    if col not in core_cols
-                }
+            for original_idx, row in df.iterrows():
                 sites.append(
                     Site(
                         name=str(row[name_col]),
@@ -65,12 +59,13 @@ class ExcelSiteRepository(SiteRepository):
                         coverage_type=CoverageType.classify(row[coverage_type_col]),
                         lon=float(row[lon_col]),
                         lat=float(row[lat_col]),
-                        extra_data=extra,
+                        extra_data={"_source_row": int(original_idx)},
                     )
                 )
             return sites
 
         # Legacy path: auto-detect columns
+        df = pd.read_excel(self.file_path, sheet_name=0)
         for col in [COL_SITE_NAME, COL_FREQ, COL_COVER_TYPE]:
             if col not in df.columns:
                 raise KeyError(f"❌ 找不到列 '{col}'")
@@ -83,15 +78,16 @@ class ExcelSiteRepository(SiteRepository):
         df[lon_col] = pd.to_numeric(df[lon_col], errors="coerce")
         df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")
         valid_mask = df[lon_col].notna() & df[lat_col].notna()
-        df = df[valid_mask].reset_index(drop=True)
+        df = df[valid_mask]
 
         sites = []
-        for _, row in df.iterrows():
+        for original_idx, row in df.iterrows():
             extra = {
                 col: row[col]
                 for col in df.columns
                 if col not in {COL_SITE_NAME, COL_FREQ, COL_COVER_TYPE, lat_col, lon_col}
             }
+            extra["_source_row"] = int(original_idx)
             sites.append(
                 Site(
                     name=str(row[COL_SITE_NAME]),

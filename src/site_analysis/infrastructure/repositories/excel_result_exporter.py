@@ -31,7 +31,9 @@ class ExcelResultExporter:
                 "经度": site.lon,
                 "纬度": site.lat,
             }
-            row.update(site.extra_data)
+            # Exclude internal bookkeeping fields from regular export
+            extra = {k: v for k, v in site.extra_data.items() if not k.startswith("_")}
+            row.update(extra)
             rows.append(row)
 
         df = pd.DataFrame(rows)
@@ -79,6 +81,70 @@ class ExcelResultExporter:
             df_summary.to_excel(writer, sheet_name="Summary", index=False)
             df_results.to_excel(writer, sheet_name="Results", index=False)
 
+    def export_merged_with_summary(
+        self,
+        sites: List[Site],
+        summary: AnalysisSummary,
+        output_path: Path,
+        raw_site_file: Path,
+    ) -> None:
+        """Export results merged with raw site fields plus a summary sheet."""
+        df_merged = self._merge_with_raw(sites, raw_site_file)
+        df_summary = pd.DataFrame({
+            "指标": [
+                "总站点数",
+                "AOI已匹配",
+                "室内站总数",
+                "室外站总数",
+                "1000米内找到室外站",
+            ],
+            "数值": [
+                summary.total_sites,
+                summary.aoi_matched,
+                summary.indoor_sites,
+                summary.outdoor_sites,
+                summary.indoor_with_outdoor,
+            ],
+        })
+
+        with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+            df_summary.to_excel(writer, sheet_name="Summary", index=False)
+            df_merged.to_excel(writer, sheet_name="Results", index=False)
+
+    def _merge_with_raw(self, sites: List[Site], raw_site_file: Path) -> pd.DataFrame:
+        """Re-read the raw site file and merge analysis results by source row index."""
+        raw_df = pd.read_excel(raw_site_file, sheet_name=0)
+
+        result_rows = []
+        for site in sites:
+            result_rows.append({
+                "_source_row": site.extra_data.get("_source_row", -1),
+                "AOI_省": site.result.aoi_province,
+                "AOI_市": site.result.aoi_city,
+                "AOI_场景": site.result.aoi_scene,
+                "AOI_场景大类": site.result.aoi_scene_big,
+                "AOI_场景小类": site.result.aoi_scene_small,
+                "AOI匹配状态": site.result.aoi_match_status,
+                "最近室外站_名称": site.result.nearest_outdoor_name,
+                "最近室外站_频段": site.result.nearest_outdoor_freq,
+                "最近室外站_距离_米": site.result.nearest_outdoor_distance_m,
+            })
+        result_df = pd.DataFrame(result_rows)
+
+        # Merge on raw_df index == result_df._source_row
+        merged = raw_df.merge(
+            result_df, left_index=True, right_on="_source_row", how="left"
+        )
+        merged = merged.drop(columns=["_source_row"])
+
+        # Reorder: analysis columns first, then raw columns
+        analysis_cols = [
+            "AOI_省", "AOI_市", "AOI_场景", "AOI_场景大类", "AOI_场景小类", "AOI匹配状态",
+            "最近室外站_名称", "最近室外站_频段", "最近室外站_距离_米",
+        ]
+        raw_cols = [c for c in merged.columns if c not in analysis_cols]
+        return merged[analysis_cols + raw_cols]
+
     def to_dataframe(self, sites: List[Site]) -> pd.DataFrame:
         """Return results as a DataFrame without writing to disk."""
         rows = []
@@ -99,7 +165,9 @@ class ExcelResultExporter:
                 "经度": site.lon,
                 "纬度": site.lat,
             }
-            row.update(site.extra_data)
+            # Exclude internal bookkeeping fields from regular export
+            extra = {k: v for k, v in site.extra_data.items() if not k.startswith("_")}
+            row.update(extra)
             rows.append(row)
 
         df = pd.DataFrame(rows)

@@ -10,12 +10,12 @@ from site_analysis.domain.repositories import AoiRepository
 from site_analysis.infrastructure.geo.geometry_adapter import ShapelyAdapter
 
 
-def _read_csv_with_fallback_encoding(file_path: Path) -> pd.DataFrame:
+def _read_csv_with_fallback_encoding(file_path: Path, usecols=None) -> pd.DataFrame:
     """Read CSV trying utf-8-sig first, then gbk."""
     try:
-        return pd.read_csv(file_path, encoding="utf-8-sig")
+        return pd.read_csv(file_path, encoding="utf-8-sig", usecols=usecols)
     except UnicodeDecodeError:
-        return pd.read_csv(file_path, encoding="gbk")
+        return pd.read_csv(file_path, encoding="gbk", usecols=usecols)
 
 
 class CsvAoiRepository(AoiRepository):
@@ -26,14 +26,13 @@ class CsvAoiRepository(AoiRepository):
         self.column_mapping = column_mapping
 
     def load_all(self) -> List[AOI]:
-        df = _read_csv_with_fallback_encoding(self.file_path)
-        aois = []
-
         if self.column_mapping is None:
             raise ValueError("CSV AOI repository requires a column_mapping")
 
         scene_col = self.column_mapping.scene_col
         boundary_col = self.column_mapping.boundary_col
+        df = _read_csv_with_fallback_encoding(self.file_path, usecols=[scene_col, boundary_col])
+        aois = []
 
         adapter = ShapelyAdapter()
         for _, row in df.iterrows():

@@ -10,12 +10,12 @@ from site_analysis.domain.value_objects import ColumnMapping, CoverageType
 from site_analysis.domain.repositories import SiteRepository
 
 
-def _read_csv_with_fallback_encoding(file_path: Path) -> pd.DataFrame:
+def _read_csv_with_fallback_encoding(file_path: Path, usecols=None) -> pd.DataFrame:
     """Read CSV trying utf-8-sig first, then gbk."""
     try:
-        return pd.read_csv(file_path, encoding="utf-8-sig")
+        return pd.read_csv(file_path, encoding="utf-8-sig", usecols=usecols)
     except UnicodeDecodeError:
-        return pd.read_csv(file_path, encoding="gbk")
+        return pd.read_csv(file_path, encoding="gbk", usecols=usecols)
 
 
 class CsvSiteRepository(SiteRepository):
@@ -26,9 +26,6 @@ class CsvSiteRepository(SiteRepository):
         self.column_mapping = column_mapping
 
     def load_all(self) -> List[Site]:
-        df = _read_csv_with_fallback_encoding(self.file_path)
-        sites = []
-
         if self.column_mapping is None:
             raise ValueError("CSV Site repository requires a column_mapping")
 
@@ -37,20 +34,17 @@ class CsvSiteRepository(SiteRepository):
         lat_col = self.column_mapping.lat_col
         freq_col = self.column_mapping.freq_col
         coverage_type_col = self.column_mapping.coverage_type_col
+        needed_cols = [name_col, lon_col, lat_col, freq_col, coverage_type_col]
+
+        df = _read_csv_with_fallback_encoding(self.file_path, usecols=needed_cols)
+        sites = []
 
         df[lon_col] = pd.to_numeric(df[lon_col], errors="coerce")
         df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")
         valid_mask = df[lon_col].notna() & df[lat_col].notna()
-        df = df[valid_mask].reset_index(drop=True)
+        df = df[valid_mask]
 
-        core_cols = {name_col, lon_col, lat_col, freq_col, coverage_type_col}
-
-        for _, row in df.iterrows():
-            extra = {
-                col: row[col]
-                for col in df.columns
-                if col not in core_cols
-            }
+        for original_idx, row in df.iterrows():
             sites.append(
                 Site(
                     name=str(row[name_col]),
@@ -58,7 +52,7 @@ class CsvSiteRepository(SiteRepository):
                     coverage_type=CoverageType.classify(row[coverage_type_col]),
                     lon=float(row[lon_col]),
                     lat=float(row[lat_col]),
-                    extra_data=extra,
+                    extra_data={"_source_row": int(original_idx)},
                 )
             )
         return sites

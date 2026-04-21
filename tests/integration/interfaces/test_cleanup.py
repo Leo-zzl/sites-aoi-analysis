@@ -108,10 +108,10 @@ class TestCleanup:
 
 class TestUploadLimit:
     def test_upload_oversized_file_rejected(self, client, tmp_path: Path):
-        """P4-T04: Uploading a file >50MB should be rejected."""
+        """P4-T04: Uploading a file >500MB should be rejected."""
         big_file = tmp_path / "big.xlsx"
-        # Create a file slightly over 50MB
-        big_file.write_bytes(b"x" * (50 * 1024 * 1024 + 1))
+        # Create a file slightly over 500MB
+        big_file.write_bytes(b"x" * (500 * 1024 * 1024 + 1))
 
         with big_file.open("rb") as f:
             res = client.post("/upload", data={"file_type": "aoi"}, files={"file": ("big.xlsx", f)})
@@ -119,4 +119,4 @@ class TestUploadLimit:
         assert res.status_code == 200
         data = res.json()
         assert "error" in data
-        assert "50MB" in data["error"]
+        assert "500MB" in data["error"]

@@ -18,13 +18,13 @@ class ExcelAoiRepository(AoiRepository):
         self.column_mapping = column_mapping
 
     def load_all(self) -> List[AOI]:
-        df = pd.read_excel(self.file_path, sheet_name=0)
+        adapter = ShapelyAdapter()
         aois = []
 
-        adapter = ShapelyAdapter()
         if self.column_mapping is not None:
             scene_col = self.column_mapping.scene_col
             boundary_col = self.column_mapping.boundary_col
+            df = pd.read_excel(self.file_path, sheet_name=0, usecols=[scene_col, boundary_col])
             for _, row in df.iterrows():
                 wkt_str = str(row.get(boundary_col, "")).strip()
                 wkt_str = wkt_str.strip('"').strip("'").strip()
@@ -45,6 +45,7 @@ class ExcelAoiRepository(AoiRepository):
             return aois
 
         # Legacy path: hard-coded column positions
+        df = pd.read_excel(self.file_path, sheet_name=0)
         for _, row in df.iterrows():
             wkt_str = str(row.iloc[6]).strip()
             wkt_str = wkt_str.strip('"').strip("'").strip()
