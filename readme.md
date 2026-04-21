@@ -41,6 +41,8 @@
 pip install -e .
 ```
 
+> **环境要求**：项目依赖 UTF-8 编码环境。在 Windows 或 CI 中运行前，请确保设置 `LANG=en_US.UTF-8` 和 `PYTHONIOENCODING=utf-8`。
+
 ### Electron 桌面应用（无需 Python 环境）
 
 下载 [Releases](https://github.com/Leo-zzl/sites-aoi-analysis/releases) 中的 Windows 安装包或便携版即可直接运行。
