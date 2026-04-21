@@ -42,12 +42,12 @@
 
 | 编号 | 风险点 | 影响 | 现状 |
 |------|--------|------|------|
-| R1 | 同时维护 tkinter + Electron 两套 GUI | 🔴 高 | 任何新功能需改两处；`main.py --gui` 仍拉起 tkinter |
-| R2 | 进度反馈太粗，用户误判"卡死" | 🔴 高 | 仅 6 个百分比节点，无数据量、无子步骤、无动画 |
-| R3 | 前端 test 脚本为占位符 | 🟡 中 | `npm test` 直接 `exit 1`，Electron 零自动化测试 |
-| R4 | API Session / Job 纯内存存储 | 🟡 中 | 进程重启后 session/job 全失效；内存只增不减 |
-| R5 | 上传临时文件无清理策略 | 🟡 中 | `api.py` 只写不删，长期堆积 |
-| R6 | 无文件大小限制 | 🟢 低 | 误传超大 Excel 可能导致 OOM |
+| R1 | 同时维护 tkinter + Electron 两套 GUI | ✅ 已解决 | tkinter 代码已彻底移除，`main.py --gui` 返回友好提示后退出 |
+| R2 | 进度反馈太粗，用户误判"卡死" | ✅ 已解决 | 后端输出 8+ 个带数据量的子步骤；前端有步骤轨道、实时日志、动画 |
+| R3 | 前端 test 脚本为占位符 | ✅ 已解决 | Vitest + happy-dom 已接入，18 个前端单元测试全部通过 |
+| R4 | API Session / Job 纯内存存储 | ✅ 已解决 | 分析完成后自动清理 session；Job 30 分钟 TTL 自动移除 |
+| R5 | 上传临时文件无清理策略 | ✅ 已解决 | `finally` 块自动删除 `TEMP_DIR` 内临时文件；应用退出时调用 `/cleanup` |
+| R6 | 无文件大小限制 | ✅ 已解决 | 单文件 50MB 上限，超限返回清晰错误，不触发后端 OOM |
 
 ---
 
@@ -173,6 +173,8 @@ main
 - **验证流程**：选择 AOI 文件 → 选择站点文件 → 校验 → 开始分析 → 结果保存
 - **通过标准**：全流程无需 `main.py --gui` 即可完成功能闭环
 
+> **Phase 1 工作总结**：已在 `feature/remove-tkinter` 分支完成。tkinter GUI 目录已删除，`main.py` 已清理，`ImportService.suggest_mapping` 已迁移并通过测试验证。
+
 ---
 
 ## Phase 2 — 后端进度精细化
@@ -239,6 +241,8 @@ main
 - **TDD 要求**：先写 P2-T05，确认测试失败 → 透传 detail → 测试通过
 - **要求**：所有 push 必须携带 `detail` 参数；与 P4 约定：**finally 块保持原样**
 
+> **Phase 2 工作总结**：已在 `feature/backend-progress` 分支完成。`analysis_service.py` 已增加各阶段的详细数据反馈（AOI 数量、站点数量、匹配统计等），百分比映射已重新校准。
+
 ---
 
 ## Phase 3 — 前端进度 UX 全面升级
@@ -291,6 +295,8 @@ main
 - **要求**：
   - 取消：当前步骤标红为"已取消"，保留已完成步骤上下文
   - 报错：错误信息以红色卡片展示在日志底部
+
+> **Phase 3 工作总结**：已在 `feature/frontend-ux` 分支完成。前端已升级为可视化步骤轨道 + 实时日志 + 动态动画，包含进度条脉冲、doing 呼吸点、日志滑入动画、统计摘要卡片。
 
 ---
 
@@ -353,6 +359,8 @@ main
 - **方案**：`/upload` 接口增加大小校验
   - 单文件上限 50 MB
   - 超限返回 `{"error": "文件超过 50MB 限制"}`
+
+> **Phase 4 工作总结**：已在 `feature/engineering-cleanup` 分支完成。临时文件 finally 清理、Job 30 分钟 TTL、`POST /cleanup` 接口、Vitest 测试框架、50MB 上传限制、Playwright E2E 测试已全部实现并通过测试。
 
 ---
 
@@ -483,6 +491,8 @@ Day 7
 | 功能无损 | 全部 66 个 pytest 通过，分析结果与重组前完全一致 |
 | 性能无退化 | `test_performance.py` 耗时与基线差异 < 5% |
 
+> **Phase 5 工作总结**：已在 `feature/domain-decouple-shapely` 分支完成。新增 `GeometryAdapter` Protocol + `ShapelyAdapter` 实现；`domain/models.py` 中 `AOI.geometry` 已改为 WKT 字符串，`Site.geometry` property 已移除 shapely 依赖；仓储和应用层通过 adapter 进行几何转换。全部 pytest 通过，零回归。
+
 ---
 
 ## Phase 6 — 工程化加固续篇
@@ -525,24 +535,29 @@ Day 7
 - **动作**：在 `pyproject.toml` 增加 `[tool.mypy]` 配置，先对 `domain/` 和 `application/` 启用类型检查
 - **收益**：提前发现接口契约错误，尤其 Repository 抽象迁移后，类型提示能防止实现类漏写方法
 
+> **Phase 6 工作总结**：
+> - **6.1 补齐图标**：已在 `feature/electron-icons` 分支完成。生成 `icon.ico`（6 分辨率）和 `icon.icns`（7 分辨率）。
+> - **6.2 稳定 CI**：已在 `feature/ci-stability` 分支完成。删除不稳定 legacy Electron 启动测试，由 Playwright E2E 接管。
+> - **6.3 UTF-8 安全**：已在 `feature/ci-stability` 分支完成。`release.yml` 增加 `LANG=en_US.UTF-8` + `PYTHONIOENCODING=utf-8`；`readme.md` 增加环境要求说明。
+> - **6.4 清理缓存**：已完成。`git ls-files | grep __pycache__` 返回空；`.gitignore` 已包含 `__pycache__/`；本地残留已清理。
+
 ---
 
-## 三、优先级与执行建议
+## 三、优先级与执行建议（已更新）
 
 ```
-立即（本周）
-  └─ 6.1 补齐 Electron 图标（阻塞打包）
-  └─ 6.2 处理不稳定 Electron 测试（减少 CI 噪音）
+已完成 ✅
+  ├─ P1-P4 核心功能重构（tkinter 移除、进度精细化、前端 UX、工程化加固）
+  ├─ Phase 5 领域层解耦 shapely
+  ├─ 6.1 补齐 Electron 图标
+  ├─ 6.2 处理不稳定 Electron 测试
+  ├─ 6.3 中文文件名 CI 安全
+  └─ 6.4 清理 __pycache__ 残留
 
-短期（2 周内）
-  └─ 6.4 清理 __pycache__ 残留（一次性操作）
-  └─ 6.3 中文文件名 CI 安全（GitHub Actions 配置）
-
-中期（1 个月内）
-  └─ Phase 5 领域层解耦（工作量最大，需充分测试）
-
-长期（按需）
-  └─ 6.5 类型检查（团队熟悉后可逐步推进）
+待办（按优先级）
+  └─ 6.5 引入 mypy/pyright 类型检查（长期改进，团队熟悉后推进）
+  └─ 前端测试继续补充（步骤渲染、动画类名切换的 DOM 级测试）
+  └─ 性能基准回归测试（Phase 5 重构后确认无退化）
 ```
 
 ---
