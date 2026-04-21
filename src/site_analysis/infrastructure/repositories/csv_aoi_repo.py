@@ -4,11 +4,10 @@ from pathlib import Path
 from typing import List, Optional
 
 import pandas as pd
-from shapely.wkt import loads as wkt_loads
-
 from site_analysis.domain.models import AOI
 from site_analysis.domain.value_objects import ColumnMapping
 from site_analysis.domain.repositories import AoiRepository
+from site_analysis.infrastructure.geo.geometry_adapter import ShapelyAdapter
 
 
 def _read_csv_with_fallback_encoding(file_path: Path) -> pd.DataFrame:
@@ -36,14 +35,13 @@ class CsvAoiRepository(AoiRepository):
         scene_col = self.column_mapping.scene_col
         boundary_col = self.column_mapping.boundary_col
 
+        adapter = ShapelyAdapter()
         for _, row in df.iterrows():
             wkt_str = str(row.get(boundary_col, "")).strip()
             wkt_str = wkt_str.strip('"').strip("'").strip()
             if not wkt_str or wkt_str.lower() == "nan":
                 continue
-            try:
-                polygon = wkt_loads(wkt_str)
-            except Exception:
+            if not adapter.validate_wkt(wkt_str):
                 continue
             aois.append(
                 AOI(
@@ -52,7 +50,7 @@ class CsvAoiRepository(AoiRepository):
                     scene=str(row.get(scene_col, "")).strip(),
                     scene_big="",
                     scene_small="",
-                    geometry=polygon,
+                    geometry=wkt_str,
                 )
             )
         return aois

@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import List
 
 import pandas as pd
-from shapely.wkt import loads as wkt_loads
 
 from site_analysis.domain.value_objects import ColumnMapping, FileType, ValidationResult
+from site_analysis.infrastructure.geo.geometry_adapter import ShapelyAdapter
 
 
 # Keyword sets for auto-detection (migrated from gui/view_model.py)
@@ -109,9 +109,8 @@ class ImportService:
             if not wkt_str or wkt_str.lower() == "nan":
                 errors.append(f"第 {idx + 1} 行边界数据为空")
                 continue
-            try:
-                wkt_loads(wkt_str)
-            except Exception:
+            adapter = ShapelyAdapter()
+            if not adapter.validate_wkt(wkt_str):
                 errors.append(f"第 {idx + 1} 行 WKT 格式错误")
 
         preview_rows = df.head(5).to_dict(orient="records")

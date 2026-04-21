@@ -3,8 +3,6 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from shapely.geometry import Point, Polygon
-
 from site_analysis.domain.value_objects import AnalysisResult, CoverageType
 
 
@@ -21,10 +19,6 @@ class Site:
     result: AnalysisResult = field(default_factory=AnalysisResult)
 
     @property
-    def geometry(self) -> Point:
-        return Point(self.lon, self.lat)
-
-    @property
     def is_indoor(self) -> bool:
         return self.coverage_type == CoverageType.INDOOR
 
@@ -35,14 +29,11 @@ class Site:
 
 @dataclass
 class AOI:
-    """Area of Interest with a polygon boundary."""
+    """Area of Interest with a polygon boundary stored as WKT."""
 
     province: str
     city: str
     scene: str
     scene_big: str
     scene_small: str
-    geometry: Polygon
-
-    def contains(self, site: Site) -> bool:
-        return self.geometry.contains(site.geometry)
+    geometry: str  # WKT string; spatial calculations use GeometryAdapter

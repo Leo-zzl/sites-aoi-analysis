@@ -10,6 +10,7 @@ from site_analysis.domain.models import AOI, Site
 from site_analysis.domain.value_objects import AnalysisResult, AnalysisSummary, UtmZone
 from site_analysis.infrastructure.geo.projection import project_sites_to_utm
 from site_analysis.infrastructure.geo.spatial_index import SpatialIndex
+from site_analysis.infrastructure.geo.geometry_adapter import ShapelyAdapter
 from site_analysis.domain.repositories import AoiRepository, SiteRepository
 from site_analysis.infrastructure.repositories.excel_result_exporter import ExcelResultExporter
 
@@ -63,10 +64,11 @@ class SiteAnalysisService:
         if not aois or not sites:
             return
 
-        # Build GeoDataFrames for spatial join
+        # Build GeoDataFrames for spatial join (adapter converts domain WKT to shapely)
+        adapter = ShapelyAdapter()
         site_gdf = gpd.GeoDataFrame(
             {"site_idx": range(len(sites))},
-            geometry=[s.geometry for s in sites],
+            geometry=[adapter.point_from_site(s) for s in sites],
             crs="EPSG:4326",
         )
         aoi_gdf = gpd.GeoDataFrame(
@@ -77,7 +79,7 @@ class SiteAnalysisService:
                 "aoi_scene_big": [a.scene_big for a in aois],
                 "aoi_scene_small": [a.scene_small for a in aois],
             },
-            geometry=[a.geometry for a in aois],
+            geometry=[adapter.polygon_from_aoi(a) for a in aois],
             crs="EPSG:4326",
         )
 
