@@ -59,7 +59,8 @@
       ],
       "icon": "electron/assets/icon.icns",
       "signIgnore": [
-        "site-analysis-api/_internal/Python.framework"
+        "site-analysis-api/_internal/Python.framework",
+        "site-analysis-api/_internal/Python3.framework"
       ]
     }
   },
