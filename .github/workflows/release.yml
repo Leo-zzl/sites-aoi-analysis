@@ -63,7 +63,7 @@ jobs:
         run: npm ci
 
       - name: Build Windows app
-        run: npx electron-builder --win --x64
+        run: npx electron-builder --win --x64 --publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -130,7 +130,7 @@ jobs:
         run: npm ci
 
       - name: Build macOS app
-        run: npx electron-builder --mac
+        run: npx electron-builder --mac --publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
