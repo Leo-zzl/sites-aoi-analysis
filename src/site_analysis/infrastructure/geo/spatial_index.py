@@ -17,7 +17,7 @@ class SpatialIndex:
         if not valid_mask.all():
             invalid_count = int((~valid_mask).sum())
             # In a CLI context this might print; in tests it's acceptable noise
-            print(f"⚠️  发现 {invalid_count} 个无效坐标，已过滤")
+            print(f"[WARNING] 发现 {invalid_count} 个无效坐标，已过滤")
             coords = coords[valid_mask]
             if payloads is not None:
                 payloads = [p for p, m in zip(payloads, valid_mask) if m]
@@ -54,7 +54,7 @@ class SpatialIndex:
 
         if not valid_mask.all():
             invalid_count = int((~valid_mask).sum())
-            print(f"⚠️  发现 {invalid_count} 个无效查询点（NaN/inf），将返回空结果")
+            print(f"[WARNING] 发现 {invalid_count} 个无效查询点（NaN/inf），将返回空结果")
 
         valid_coords = query_coords[valid_mask]
         distances, indices = self.tree.query(valid_coords, k=1, distance_upper_bound=max_distance)
