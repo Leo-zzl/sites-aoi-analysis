@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "site-analysis"
-version = "4.0.0"
+version = "5.0.0"
 description = "小区-AOI空间匹配与室内站宏站分析工具"
 readme = "readme.md"
 requires-python = ">=3.10"
