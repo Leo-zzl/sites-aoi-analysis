@@ -1,6 +1,6 @@
 {
   "name": "sites_in_aoi",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "description": "本工具用于无线通信网络规划中的**站点-AOI空间关联分析**，包含两大核心功能：",
   "main": "electron/main.js",
   "scripts": {
@@ -13,7 +13,7 @@
   "build": {
     "appId": "com.leozzl.site-analysis",
     "productName": "小区-AOI空间匹配分析",
-    "copyright": "Copyright © 2026",
+    "copyright": "Copyright © 2026 00450056",
     "directories": {
       "output": "dist"
     },
@@ -70,7 +70,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/Leo-zzl/sites-aoi-analysis/issues"

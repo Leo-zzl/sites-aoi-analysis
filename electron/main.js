@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const net = require('net');
@@ -130,6 +130,41 @@ function createWindow() {
   });
 }
 
+function createMenu() {
+  const template = [
+    {
+      role: 'appMenu',
+    },
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    {
+      label: 'Window',
+      role: 'windowMenu',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'close' },
+        { type: 'separator' },
+        {
+          label: '关于',
+          click: () => {
+            dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: '关于',
+              message: '小区-AOI空间匹配分析',
+              detail: `版本: 6.0.0\n提交: 1fcbba1\n\nCopyright © 2026 00450056. 保留所有权利。\n\n本软件基于 MIT 许可证发布。\n允许任何人免费获得本软件副本，并可以无限制地\n处理本软件，但须保留版权声明。`,
+              buttons: ['确定'],
+              defaultId: 0,
+            });
+          },
+        },
+      ],
+    },
+  ];
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 app.whenReady().then(async () => {
   startPythonBackend();
   const ok = await waitForApi(40);
@@ -139,6 +174,7 @@ app.whenReady().then(async () => {
     return;
   }
   createWindow();
+  createMenu();
 });
 
 app.on('window-all-closed', () => {
