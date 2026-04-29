@@ -37,3 +37,4 @@ class AOI:
     scene_big: str
     scene_small: str
     geometry: str  # WKT string; spatial calculations use GeometryAdapter
+    extra_data: dict = field(default_factory=dict)

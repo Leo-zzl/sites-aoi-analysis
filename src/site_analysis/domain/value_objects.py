@@ -54,6 +54,7 @@ class AnalysisResult:
     nearest_outdoor_name: str = ""
     nearest_outdoor_freq: str = ""
     nearest_outdoor_distance_m: Optional[float] = None
+    extra_data: Dict[str, str] = field(default_factory=dict)
 
     @property
     def aoi_match_status(self) -> str:
@@ -87,6 +88,7 @@ class ColumnMapping:
     coverage_type_col: str = ""
     scene_col: str = ""
     boundary_col: str = ""
+    extra_aoi_cols: List[str] = field(default_factory=list)
 
     def missing_aoi_fields(self) -> List[str]:
         """Return list of missing AOI field names."""
@@ -114,10 +116,13 @@ class ColumnMapping:
 
     def to_aoi_dict(self) -> Dict[str, str]:
         """Return mapping for AOI fields only."""
-        return {
+        mapping = {
             "scene": self.scene_col,
             "boundary": self.boundary_col,
         }
+        for col in self.extra_aoi_cols:
+            mapping[col] = col
+        return mapping
 
     def to_site_dict(self) -> Dict[str, str]:
         """Return mapping for Site fields only."""

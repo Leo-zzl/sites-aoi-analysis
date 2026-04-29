@@ -32,6 +32,8 @@ class ExcelResultExporter:
                 "经度": site.lon,
                 "纬度": site.lat,
             }
+            # Include user-selected AOI extra columns
+            row.update(site.result.extra_data)
             # Exclude internal bookkeeping fields from regular export
             extra = {k: v for k, v in site.extra_data.items() if not k.startswith("_")}
             row.update(extra)
@@ -173,6 +175,7 @@ class ExcelResultExporter:
                 "最近室外站_名称": site.result.nearest_outdoor_name,
                 "最近室外站_频段": site.result.nearest_outdoor_freq,
                 "最近室外站_距离_米": site.result.nearest_outdoor_distance_m,
+                **site.result.extra_data,
             })
         result_df = pd.DataFrame(result_rows)
 
@@ -210,6 +213,8 @@ class ExcelResultExporter:
                 "经度": site.lon,
                 "纬度": site.lat,
             }
+            # Include user-selected AOI extra columns
+            row.update(site.result.extra_data)
             # Exclude internal bookkeeping fields from regular export
             extra = {k: v for k, v in site.extra_data.items() if not k.startswith("_")}
             row.update(extra)

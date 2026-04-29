@@ -73,6 +73,7 @@ class SiteAnalysisService:
         )
         aoi_gdf = gpd.GeoDataFrame(
             {
+                "aoi_idx": range(len(aois)),
                 "aoi_province": [a.province for a in aois],
                 "aoi_city": [a.city for a in aois],
                 "aoi_scene": [a.scene for a in aois],
@@ -89,13 +90,15 @@ class SiteAnalysisService:
         for site_idx, row in joined.iterrows():
             site = sites[int(site_idx)]
             if pd.notna(row.get("aoi_scene")):
+                aoi = aois[int(row["aoi_idx"])]
                 site.result = AnalysisResult(
-                    aoi_province=str(row.get("aoi_province", "")),
-                    aoi_city=str(row.get("aoi_city", "")),
-                    aoi_scene=str(row.get("aoi_scene", "")),
-                    aoi_scene_big=str(row.get("aoi_scene_big", "")),
-                    aoi_scene_small=str(row.get("aoi_scene_small", "")),
+                    aoi_province=aoi.province,
+                    aoi_city=aoi.city,
+                    aoi_scene=aoi.scene,
+                    aoi_scene_big=aoi.scene_big,
+                    aoi_scene_small=aoi.scene_small,
                     aoi_matched=True,
+                    extra_data=aoi.extra_data,
                 )
 
     def _find_nearest_outdoor(self, sites: List[Site]) -> None:
@@ -140,6 +143,7 @@ class SiteAnalysisService:
                     nearest_outdoor_name=nearest.name,
                     nearest_outdoor_freq=nearest.freq,
                     nearest_outdoor_distance_m=float(distances[i]),
+                    extra_data=indoor.result.extra_data,
                 )
         self.progress_callback(78, "查找最近室外站...", f"已完成，{found_count}/{len(indoor_sites)} 个室内站找到最近室外站")
 

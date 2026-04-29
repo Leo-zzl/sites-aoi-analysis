@@ -94,6 +94,7 @@ def upload_file(file_type: str = Form(...), file: UploadFile = File(...)):
         mapping = {
             "scene_col": suggested.scene_col,
             "boundary_col": suggested.boundary_col,
+            "extra_aoi_cols": suggested.extra_aoi_cols,
         }
     elif file_type == "site":
         mapping = {
@@ -121,6 +122,7 @@ class ValidateRequest(BaseModel):
     site_session_id: Optional[str] = None
     scene_col: Optional[str] = None
     boundary_col: Optional[str] = None
+    extra_aoi_cols: Optional[List[str]] = None
     name_col: Optional[str] = None
     lon_col: Optional[str] = None
     lat_col: Optional[str] = None
@@ -137,7 +139,9 @@ def validate(req: ValidateRequest):
     if req.aoi_session_id and req.aoi_session_id in _upload_sessions:
         path = Path(_upload_sessions[req.aoi_session_id]["path"])
         aoi_mapping = ColumnMapping(
-            scene_col=req.scene_col or "", boundary_col=req.boundary_col or ""
+            scene_col=req.scene_col or "",
+            boundary_col=req.boundary_col or "",
+            extra_aoi_cols=req.extra_aoi_cols or [],
         )
         result = importer.validate_mapping(path, aoi_mapping, "aoi")
         results.append(result)
@@ -168,6 +172,7 @@ class AnalyzeRequest(BaseModel):
     output_path: str
     scene_col: Optional[str] = None
     boundary_col: Optional[str] = None
+    extra_aoi_cols: Optional[List[str]] = None
     name_col: Optional[str] = None
     lon_col: Optional[str] = None
     lat_col: Optional[str] = None
@@ -312,7 +317,9 @@ async def analyze(
     output_path = Path(req.output_path)
 
     aoi_mapping = ColumnMapping(
-        scene_col=req.scene_col or "", boundary_col=req.boundary_col or ""
+        scene_col=req.scene_col or "",
+        boundary_col=req.boundary_col or "",
+        extra_aoi_cols=req.extra_aoi_cols or [],
     )
     site_mapping = ColumnMapping(
         name_col=req.name_col or "",

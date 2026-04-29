@@ -22,25 +22,30 @@ class ExcelAoiRepository(AoiRepository):
         aois = []
 
         if self.column_mapping is not None:
-            scene_col = self.column_mapping.scene_col
-            boundary_col = self.column_mapping.boundary_col
-            usecols = [c for c in [scene_col, boundary_col] if c]
+            mapping = self.column_mapping
+            cols = [mapping.scene_col, mapping.boundary_col] + list(mapping.extra_aoi_cols)
+            usecols = [c for c in cols if c]
             df = pd.read_excel(self.file_path, sheet_name=0, usecols=usecols or None)
             for _, row in df.iterrows():
-                wkt_str = str(row.get(boundary_col, "")).strip()
+                wkt_str = str(row.get(mapping.boundary_col, "")).strip()
                 wkt_str = wkt_str.strip('"').strip("'").strip()
                 if not wkt_str or wkt_str.lower() == "nan":
                     continue
                 if not adapter.validate_wkt(wkt_str):
                     continue
+                extra = {}
+                for col in mapping.extra_aoi_cols:
+                    if col in df.columns:
+                        extra[col] = str(row.get(col, "")).strip()
                 aois.append(
                     AOI(
                         province="",
                         city="",
-                        scene=str(row.get(scene_col, "")).strip(),
+                        scene=str(row.get(mapping.scene_col, "")).strip(),
                         scene_big="",
                         scene_small="",
                         geometry=wkt_str,
+                        extra_data=extra,
                     )
                 )
             return aois

@@ -21,6 +21,7 @@ const els = {
   aoiName: document.getElementById('aoi-name'),
   aoiScene: document.getElementById('aoi-scene'),
   aoiBoundary: document.getElementById('aoi-boundary'),
+  aoiExtraCols: document.getElementById('aoi-extra-cols'),
 
   siteBtn: document.getElementById('site-btn'),
   siteNameLabel: document.getElementById('site-name'),
@@ -74,6 +75,19 @@ function setSelectOptions(selectEl, columns, selectedValue) {
   }
 }
 
+function setMultiSelectOptions(selectEl, columns, selectedValues) {
+  selectEl.innerHTML = '';
+  columns.forEach((col) => {
+    const opt = document.createElement('option');
+    opt.value = col;
+    opt.textContent = col;
+    if (selectedValues && selectedValues.includes(col)) {
+      opt.selected = true;
+    }
+    selectEl.appendChild(opt);
+  });
+}
+
 function resetValidation() {
   state.valid = false;
   els.validateMsg.textContent = '请先点击【校验数据】检查文件格式';
@@ -97,6 +111,9 @@ async function pickFile(type) {
     els.aoiName.textContent = res.file_name;
     setSelectOptions(els.aoiScene, state.aoiColumns, res.mapping.scene_col);
     setSelectOptions(els.aoiBoundary, state.aoiColumns, res.mapping.boundary_col);
+    const reserved = new Set([res.mapping.scene_col, res.mapping.boundary_col].filter(Boolean));
+    const extraCols = state.aoiColumns.filter((c) => !reserved.has(c));
+    setMultiSelectOptions(els.aoiExtraCols, extraCols, res.mapping.extra_aoi_cols);
   } else {
     state.siteSessionId = res.session_id;
     state.siteColumns = res.columns || [];
@@ -113,8 +130,18 @@ async function pickFile(type) {
 els.aoiBtn.addEventListener('click', () => pickFile('aoi'));
 els.siteBtn.addEventListener('click', () => pickFile('site'));
 
-[els.aoiScene, els.aoiBoundary, els.siteNameCol, els.siteLon, els.siteLat, els.siteFreq, els.siteCover].forEach((el) => {
+[els.aoiScene, els.aoiBoundary, els.aoiExtraCols, els.siteNameCol, els.siteLon, els.siteLat, els.siteFreq, els.siteCover].forEach((el) => {
   el.addEventListener('change', resetValidation);
+});
+
+// Make AOI extra-cols select behave like a checkbox list (click to toggle)
+els.aoiExtraCols.addEventListener('mousedown', (e) => {
+  if (e.target.tagName === 'OPTION') {
+    e.preventDefault();
+    e.target.selected = !e.target.selected;
+    els.aoiExtraCols.dispatchEvent(new Event('change'));
+    els.aoiExtraCols.focus();
+  }
 });
 
 els.validateBtn.addEventListener('click', async () => {
@@ -132,6 +159,7 @@ els.validateBtn.addEventListener('click', async () => {
     site_session_id: state.siteSessionId,
     scene_col: els.aoiScene.value,
     boundary_col: els.aoiBoundary.value,
+    extra_aoi_cols: Array.from(els.aoiExtraCols.selectedOptions).map((o) => o.value),
     name_col: els.siteNameCol.value,
     lon_col: els.siteLon.value,
     lat_col: els.siteLat.value,
@@ -190,6 +218,7 @@ els.analyzeBtn.addEventListener('click', async () => {
     output_path: outPath,
     scene_col: els.aoiScene.value,
     boundary_col: els.aoiBoundary.value,
+    extra_aoi_cols: Array.from(els.aoiExtraCols.selectedOptions).map((o) => o.value),
     name_col: els.siteNameCol.value,
     lon_col: els.siteLon.value,
     lat_col: els.siteLat.value,
@@ -299,7 +328,7 @@ function setAnalyzing(active) {
   els.aoiBtn.disabled = active;
   els.siteBtn.disabled = active;
   els.browseBtn.disabled = active;
-  [els.aoiScene, els.aoiBoundary, els.siteNameCol, els.siteLon, els.siteLat, els.siteFreq, els.siteCover].forEach((el) => {
+  [els.aoiScene, els.aoiBoundary, els.aoiExtraCols, els.siteNameCol, els.siteLon, els.siteLat, els.siteFreq, els.siteCover].forEach((el) => {
     el.disabled = active;
   });
 
