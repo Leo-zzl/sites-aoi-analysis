@@ -1,6 +1,6 @@
 {
   "name": "sites_in_aoi",
-  "version": "6.0.0",
+  "version": "6.0.1",
   "description": "本工具用于无线通信网络规划中的**站点-AOI空间关联分析**，包含两大核心功能：",
   "main": "electron/main.js",
   "scripts": {
